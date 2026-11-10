@@ -1,0 +1,2185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Civil Maintenance Job Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:        #F5F4F0;
+  --surface:   #FFFFFF;
+  --border:    #D8D6CF;
+  --border-lt: #E8E6DF;
+  --text:      #1A1916;
+  --text-2:    #6B6860;
+  --text-3:    #9A9890;
+  --accent:    #1B4F8A;
+  --accent-lt: #E6EFF8;
+  --green:     #2D6A1F;
+  --green-lt:  #EAF3DE;
+  --green-bg:  #D4EDBA;
+  --amber:     #A05C10;
+  --amber-lt:  #FDF0DC;
+  --amber-bg:  #F7E4B0;
+  --red:       #8B2020;
+  --red-lt:    #FCEBEB;
+  --blue-bg:   #CCDFF5;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', sans-serif;
+  --radius:    4px;
+  --radius-lg: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); font-size: 13px; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ---- SHELL ---- */
+.shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 210px; min-width: 210px;
+  background: var(--text);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.sidebar-top { padding: 20px 20px 14px; border-bottom: 1px solid #2A2926; }
+.sidebar-logo { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); line-height: 1.6; }
+.sidebar-logo strong { color: #fff; display: block; font-size: 13px; letter-spacing: .04em; }
+
+.job-bar { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.job-bar select { width: 100%; padding: 6px 8px; background: #252421; color: #ccc; border: 1px solid #3A3835; border-radius: var(--radius); font-family: var(--sans); font-size: 12px; }
+.job-bar select:focus { outline: none; border-color: var(--accent); }
+.job-bar .btn-newjob { width: 100%; padding: 5px 8px; background: transparent; color: var(--text-3); border: 1px dashed #3A3835; border-radius: var(--radius); font-family: var(--sans); font-size: 12px; cursor: pointer; text-align: center; transition: color .15s, border-color .15s; }
+.job-bar .btn-newjob:hover { color: #fff; border-color: #666; }
+
+.sidebar-nav { padding: 10px 0; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px; color: #888680; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; font-family: var(--sans); transition: color .15s, background .15s; border-left: 3px solid transparent; }
+.nav-item:hover { color: #fff; background: #252421; }
+.nav-item.active { color: #fff; background: #252421; border-left-color: var(--accent); }
+.nav-item .nav-icon { font-size: 15px; opacity: .7; }
+.nav-item.active .nav-icon { opacity: 1; }
+
+.main { flex: 1; padding: 28px 32px; overflow-x: hidden; min-width: 0; }
+
+.page-header { margin-bottom: 24px; padding-bottom: 14px; border-bottom: 1px solid var(--border-lt); }
+.page-header h1 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.page-header p { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* ---- CARDS ---- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; margin-bottom: 14px; }
+.card-title { font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--text-2); margin-bottom: 12px; }
+
+/* ---- METRICS ---- */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.metric-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.metric-box .label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); margin-bottom: 5px; }
+.metric-box .value { font-family: var(--mono); font-size: 24px; font-weight: 500; line-height: 1; }
+.metric-box .sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.metric-box.accent { background: var(--accent); border-color: var(--accent); }
+.metric-box.accent .label, .metric-box.accent .value, .metric-box.accent .sub { color: #fff; }
+.metric-box.accent .label { opacity: .75; }
+.metric-box.accent .sub { opacity: .6; }
+
+.prog-wrap { height: 5px; background: var(--border-lt); border-radius: 3px; margin-top: 5px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+.prog-green { background: var(--green); }
+.prog-amber { background: var(--amber); }
+.prog-red { background: var(--red); }
+
+/* ---- FORMS ---- */
+.form-grid { display: grid; gap: 12px; margin-bottom: 12px; }
+.form-grid.c2 { grid-template-columns: 1fr 1fr; }
+.form-grid.c3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.c4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.field label { display: block; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; color: var(--text-2); margin-bottom: 4px; }
+.field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: var(--sans); font-size: 13px; transition: border-color .15s; }
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field input[readonly] { background: var(--bg); color: var(--text-2); }
+
+/* ---- BUTTONS ---- */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: var(--sans); font-size: 13px; cursor: pointer; font-weight: 500; transition: background .15s; white-space: nowrap; }
+.btn:hover { background: var(--bg); }
+.btn:active { transform: scale(.99); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #143d6e; }
+.btn-success { background: var(--green); color: #fff; border-color: var(--green); }
+.btn-success:hover { background: #225218; }
+.btn-danger { color: var(--red); border-color: #F7C1C1; }
+.btn-danger:hover { background: var(--red-lt); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ---- TABLES ---- */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; padding: 7px 9px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--bg); }
+tbody td { padding: 7px 9px; border-bottom: 1px solid var(--border-lt); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--bg); }
+tfoot td { padding: 7px 9px; font-size: 12px; font-weight: 600; background: var(--bg); border-top: 1px solid var(--border); color: var(--text-2); }
+
+.dr-completed td { background: #EAF3DE55; }
+.dr-precut td { background: #E6EFF855; }
+.dr-filledin td { background: #FDF0DC55; }
+
+.lr-completed, .lr-completed td { background: var(--green-bg) !important; }
+.lr-precut, .lr-precut td { background: var(--blue-bg) !important; }
+.lr-filledin, .lr-filledin td { background: var(--amber-bg) !important; }
+.lr-completed input, .lr-completed select { background: #BFDDA0 !important; border-color: #9BCB6E !important; }
+.lr-precut input, .lr-precut select { background: #B8D4F0; border-color: #85B5E8; }
+.lr-filledin input, .lr-filledin select { background: #F0D878; border-color: #D8B830; }
+
+.log-tbl input[type=number] { padding: 4px 6px; font-size: 12px; width: 72px; font-family: var(--mono); }
+.log-tbl select { padding: 4px 6px; font-size: 12px; width: 112px; }
+.log-tbl td { padding: 5px 8px; }
+
+/* ---- BADGES ---- */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 500; font-family: var(--mono); }
+.b-completed { background: var(--green-lt); color: var(--green); }
+.b-precut { background: var(--accent-lt); color: var(--accent); }
+.b-filledin { background: var(--amber-lt); color: var(--amber); }
+.b-pending { background: #F0EFE8; color: #6B6860; }
+.b-int { background: #F0EFE8; color: #6B6860; }
+.b-ext { background: var(--accent-lt); color: var(--accent); }
+.b-yes { background: var(--green-lt); color: var(--green); }
+.b-no { background: var(--accent-lt); color: var(--accent); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.dot-completed { background: var(--green); }
+.dot-precut { background: var(--accent); }
+.dot-filledin { background: var(--amber); }
+.dot-pending { background: #9A9890; }
+
+.cnt { display: inline-block; min-width: 26px; text-align: center; padding: 2px 8px; border-radius: 100px; font-size: 12px; font-weight: 600; font-family: var(--mono); }
+.cnt-completed { background: var(--green-lt); color: var(--green); }
+.cnt-precut { background: var(--accent-lt); color: var(--accent); }
+.cnt-filledin { background: var(--amber-lt); color: var(--amber); }
+.cnt-pending { background: #F0EFE8; color: #6B6860; }
+.cnt-zero { color: var(--text-3); }
+
+/* ---- ALERTS ---- */
+.alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 12px; border-left: 3px solid; }
+.alert-info { background: var(--accent-lt); color: var(--accent); border-color: var(--accent); }
+.alert-success { background: var(--green-lt); color: var(--green); border-color: var(--green); }
+.alert-warning { background: var(--amber-lt); color: var(--amber); border-color: var(--amber); }
+.alert-danger { background: var(--red-lt); color: var(--red); border-color: var(--red); }
+
+.divider { border: none; border-top: 1px solid var(--border-lt); margin: 14px 0; }
+
+.equiv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.equiv-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; text-align: center; }
+.equiv-box .val { font-family: var(--mono); font-size: 20px; font-weight: 500; }
+.equiv-box .lbl { font-size: 11px; color: var(--text-2); margin-top: 3px; }
+.equiv-box .diff { font-size: 11px; margin-top: 3px; }
+.diff-under { color: var(--red); }
+.diff-over { color: var(--green); }
+.diff-ok { color: var(--text-3); }
+
+#import-file-input { display: none; }
+.preview-scroll { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; }
+
+.hist-toggle { cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--text-2); }
+.auto-tag { font-size: 10px; color: var(--green); background: var(--green-lt); padding: 1px 7px; border-radius: 100px; margin-left: 5px; font-weight: 500; }
+
+.flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.inline-flex { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.text-mono { font-family: var(--mono); }
+.text-sm { font-size: 12px; }
+.text-muted { color: var(--text-2); }
+.text-xs { font-size: 11px; color: var(--text-3); }
+.mt8 { margin-top: 8px; }
+.empty-state { text-align: center; padding: 44px 16px; color: var(--text-3); }
+.empty-state .icon { font-size: 34px; display: block; margin-bottom: 8px; opacity: .4; }
+
+.setup-time-card { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 14px; gap: 12px; }
+.setup-time-card .title { font-weight: 600; margin-bottom: 2px; }
+.setup-time-card .desc { font-size: 12px; color: var(--text-2); }
+.setup-time-input-row { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.setup-time-input-row input { width: 88px; font-family: var(--mono); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ================================================================
+   MOBILE — bottom tab bar, single-column forms, larger tap targets
+   ================================================================ */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+
+  .main { padding: 0 0 72px; }
+
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--text); padding: 10px 14px;
+  }
+  .mobile-topbar select {
+    flex: 1; background: #252421; color: #ccc;
+    border: 1px solid #3A3835; border-radius: var(--radius);
+    font-family: var(--sans); font-size: 13px;
+    padding: 8px 10px; min-height: 40px;
+  }
+  .mobile-topbar .btn-newjob-m {
+    background: none; border: 1px solid #3A3835; border-radius: var(--radius);
+    color: var(--text-3); font-size: 22px; line-height: 1;
+    padding: 5px 10px; cursor: pointer;
+  }
+  .mobile-topbar .btn-newjob-m:hover { color: #fff; }
+
+  .page-inner { padding: 14px 14px 0; }
+
+  .bottom-nav {
+    display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--text); border-top: 1px solid #2A2926;
+    z-index: 100; height: 64px;
+  }
+  .bottom-nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; color: #888680; cursor: pointer; border: none; background: none;
+    font-family: var(--sans); font-size: 10px; font-weight: 500; padding: 6px 2px;
+    border-top: 2px solid transparent;
+  }
+  .bottom-nav-item .nav-icon { font-size: 18px; }
+  .bottom-nav-item.active { color: #fff; border-top-color: var(--accent); }
+
+  .form-grid.c2, .form-grid.c3, .form-grid.c4 { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: 1fr 1fr; }
+
+  .field input, .field select { padding: 11px 10px; font-size: 16px; min-height: 44px; }
+
+  .log-tbl input[type=number] { font-size: 16px; width: 78px; min-height: 38px; padding: 5px 5px; }
+  .log-tbl select { font-size: 15px; min-height: 38px; }
+
+  .log-tbl thead th:first-child,
+  .log-tbl tbody td:first-child {
+    position: sticky; left: 0; z-index: 1;
+    box-shadow: 2px 0 4px rgba(0,0,0,.07);
+  }
+  .log-tbl thead th:first-child { background: var(--bg); }
+  .log-tbl tbody td:first-child { background: inherit; }
+
+  .page-header h1 { font-size: 17px; }
+  .metric-box .value { font-size: 20px; }
+  .setup-time-card { flex-direction: column; align-items: flex-start; }
+  .btn { min-height: 42px; padding: 9px 14px; }
+  .card { padding: 14px; }
+  .equiv-grid { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 769px) {
+  .bottom-nav { display: none; }
+  .mobile-topbar { display: none; }
+  .page-inner { padding: 0; }
+}
+
+/* ============================================================
+   AUTH OVERLAY
+   ============================================================ */
+.auth-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.auth-overlay.hidden { display: none; }
+.auth-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  width: 100%; max-width: 360px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+.auth-logo { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); margin-bottom: 24px; }
+.auth-logo strong { display: block; font-size: 15px; color: var(--text); letter-spacing: .02em; margin-bottom: 2px; font-family: var(--sans); }
+.auth-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
+.auth-field { margin-bottom: 14px; }
+.auth-field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: 5px; }
+.auth-field input { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--sans); font-size: 14px; color: var(--text); background: var(--bg); box-sizing: border-box; }
+.auth-field input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.auth-error { color: var(--red); font-size: 12px; margin-bottom: 12px; display: none; }
+.auth-error.show { display: block; }
+.auth-first-run { background: var(--amber-lt); border: 1px solid var(--amber); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; color: var(--text); margin-bottom: 16px; display: none; }
+.auth-first-run.show { display: block; }
+.btn-auth { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+.btn-auth:hover { opacity: .9; }
+.auth-note { font-size: 11px; color: var(--text-3); text-align: center; margin-top: 14px; }
+
+/* ---- Role selector ---- */
+.role-selector { position: fixed; inset: 0; background: var(--bg); z-index: 900; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.role-selector.hidden { display: none; }
+.role-box { width: 100%; max-width: 440px; }
+.role-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.role-box p { font-size: 13px; color: var(--text-2); margin-bottom: 20px; }
+.role-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.role-card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-lg); padding: 20px 16px; cursor: pointer; text-align: center; transition: border-color .15s, box-shadow .15s; }
+.role-card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(27,79,138,.12); }
+.role-card .role-icon { font-size: 32px; margin-bottom: 10px; }
+.role-card .role-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; color: var(--text); }
+.role-card .role-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
+
+/* ---- Sidebar footer ---- */
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid #2A2926; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sidebar-user { font-size: 11px; color: #888; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-signout { background: transparent; border: 1px solid #3A3835; color: #888; border-radius: var(--radius); padding: 4px 8px; font-size: 11px; cursor: pointer; font-family: var(--sans); white-space: nowrap; }
+.btn-signout:hover { color: #fff; border-color: #666; }
+
+/* ---- Notification badge ---- */
+.notif-badge { margin-left: auto; background: #C0392B; color: #fff; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---- Team page ---- */
+.team-user-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border-lt); }
+.team-user-row:last-child { border-bottom: none; }
+.team-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-lt); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.team-user-info { flex: 1; min-width: 0; }
+.team-user-name { font-weight: 500; font-size: 13px; color: var(--text); }
+.team-user-meta { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+.team-status-pill { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+.team-status-pill.active { background: var(--green-lt); color: var(--green); }
+.team-status-pill.inactive { background: var(--red-lt); color: var(--red); }
+.checkbox-list { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+.checkbox-list label { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 3px 0; cursor: pointer; color: var(--text); }
+
+/* ============================================================
+   FIELD VIEW (mobile worker interface)
+   ============================================================ */
+.field-view { position: fixed; inset: 0; background: #EEF0F4; z-index: 800; overflow-y: auto; display: none; font-family: var(--sans); }
+.field-view.active { display: block; }
+
+.fv-header { background: #182535; color: #fff; padding: 14px 16px; position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; }
+.fv-back { background: rgba(255,255,255,.12); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.fv-htitle { font-weight: 700; font-size: 17px; }
+.fv-hsub { font-size: 12px; opacity: .6; margin-top: 1px; }
+.fv-signout { margin-left: auto; background: rgba(255,255,255,.12); border: none; color: rgba(255,255,255,.75); border-radius: 8px; padding: 5px 10px; font-size: 11px; cursor: pointer; font-family: var(--sans); white-space: nowrap; }
+
+.fv-screen { display: none; }
+.fv-screen.on { display: block; }
+
+.fv-welcome { background: #182535; color: #fff; padding: 24px 16px 20px; }
+.fv-welcome h1 { font-size: 22px; font-weight: 700; }
+.fv-welcome p { font-size: 13px; opacity: .55; margin-top: 4px; }
+.fv-sec-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; color: #9CA3AF; padding: 16px 16px 8px; }
+.fv-job-list { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 32px; }
+.fv-job-card { background: #fff; border-radius: 12px; padding: 15px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.07); cursor: pointer; display: flex; align-items: center; gap: 13px; }
+.fv-job-card:active { opacity: .82; }
+.fv-job-icon { width: 42px; height: 42px; border-radius: 10px; background: #E8F0FE; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.fv-job-name { font-weight: 600; font-size: 15px; color: #111827; }
+.fv-job-meta { font-size: 12px; color: #6B7280; margin-top: 1px; }
+.fv-job-count { margin-left: auto; background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 20px; padding: 3px 10px; font-size: 12px; color: #6B7280; white-space: nowrap; flex-shrink: 0; }
+
+.fv-daily-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.07); margin: 12px 16px 0; overflow: hidden; }
+.fv-daily-hd { background: #182535; color: #fff; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; display: flex; align-items: center; gap: 8px; }
+.fv-daily-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,.2); }
+.fv-daily-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+.fv-dfield { }
+.fv-dfield label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9CA3AF; margin-bottom: 5px; }
+.fv-dfield label .req { color: #EF4444; }
+.fv-dfield input { width: 100%; background: #F5F4F0; border: 1.5px solid #E2E5EA; border-radius: 8px; padding: 9px 11px; font-size: 16px; font-family: var(--sans); color: #111827; box-sizing: border-box; }
+.fv-dfield input:focus { outline: none; border-color: #1B4F8A; background: #fff; }
+.fv-dfield input[readonly] { opacity: .6; cursor: default; color: #6B7280; }
+.fv-save-row { padding: 0 14px 14px; display: flex; align-items: center; gap: 10px; }
+.fv-btn-save-log { flex: 1; background: #1B4F8A; color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600; font-family: var(--sans); cursor: pointer; transition: background .2s; }
+.fv-btn-save-log:disabled { opacity: .4; cursor: default; }
+.fv-btn-save-log.ok { background: #22C55E; }
+.fv-save-ts { font-size: 11px; color: #9CA3AF; white-space: nowrap; }
+
+.fv-chips { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; scrollbar-width: none; }
+.fv-chips::-webkit-scrollbar { display: none; }
+.fv-chip { flex-shrink: 0; background: #fff; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; color: #374151; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.fv-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.fv-ftabs { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.fv-ftab { background: none; border: 1.5px solid #E2E5EA; border-radius: 20px; padding: 5px 13px; font-size: 13px; color: #6B7280; cursor: pointer; font-family: var(--sans); }
+.fv-ftab.on { background: #1B4F8A; border-color: #1B4F8A; color: #fff; font-weight: 600; }
+
+.fv-dlist { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 110px; }
+.fv-dcard { background: #fff; border-radius: 12px; padding: 13px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.07); cursor: pointer; display: flex; align-items: center; gap: 12px; border-left: 4px solid transparent; }
+.fv-dcard:active { opacity: .85; }
+.fv-dcard.sp { border-left-color: #D1D5DB; }
+.fv-dcard.sc { border-left-color: #FBBF24; }
+.fv-dcard.sf { border-left-color: #60A5FA; }
+.fv-dcard.sd { border-left-color: #4ADE80; }
+.fv-dnum { font-weight: 700; font-size: 22px; color: #1B4F8A; min-width: 36px; }
+.fv-dtype { font-weight: 600; font-size: 14px; color: #111827; }
+.fv-ddim { font-size: 12px; color: #6B7280; margin-top: 2px; }
+.fv-sbadge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 9px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; }
+.fv-sbadge.sp { background: #F3F4F6; color: #374151; }
+.fv-sbadge.sc { background: #FFFBEB; color: #92400E; }
+.fv-sbadge.sf { background: #EFF6FF; color: #1D4ED8; }
+.fv-sbadge.sd { background: #F0FDF4; color: #166534; }
+
+.fv-detail-body { display: flex; flex-direction: column; gap: 14px; padding: 16px 16px 110px; }
+.fv-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.07); overflow: hidden; }
+.fv-card-hd { padding: 11px 14px 9px; border-bottom: 1px solid #E5E7EB; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9CA3AF; }
+.fv-card-bd { padding: 14px; }
+.fv-sgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px 14px; }
+.fv-sbtn { border: 2px solid #E2E5EA; background: #F5F6F8; border-radius: 9px; padding: 14px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; font-family: var(--sans); }
+.fv-sbtn .ico { font-size: 24px; line-height: 1; }
+.fv-sbtn .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #6B7280; }
+.fv-sbtn.on.sp { background: #F3F4F6; border-color: #9CA3AF; } .fv-sbtn.on.sp .lbl { color: #374151; }
+.fv-sbtn.on.sc { background: #FFFBEB; border-color: #FBBF24; } .fv-sbtn.on.sc .lbl { color: #92400E; }
+.fv-sbtn.on.sf { background: #EFF6FF; border-color: #60A5FA; } .fv-sbtn.on.sf .lbl { color: #1D4ED8; }
+.fv-sbtn.on.sd { background: #F0FDF4; border-color: #4ADE80; } .fv-sbtn.on.sd .lbl { color: #166534; }
+.fv-dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fv-dfield2 { }
+.fv-dfield2 label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9CA3AF; margin-bottom: 5px; }
+.fv-dfield2 input { width: 100%; background: #F5F4F0; border: 1.5px solid #E2E5EA; border-radius: 9px; padding: 10px 12px; font-size: 16px; font-family: var(--sans); color: #111827; box-sizing: border-box; }
+.fv-dfield2 input:focus { outline: none; border-color: #1B4F8A; background: #fff; }
+.fv-dfield2 input[readonly] { opacity: .45; cursor: default; }
+.fv-dfield2 .unit { font-size: 11px; color: #9CA3AF; margin-top: 3px; }
+.fv-ntarea { width: 100%; background: #F5F4F0; border: 1.5px solid #E2E5EA; border-radius: 9px; padding: 10px 12px; font-size: 15px; font-family: var(--sans); color: #111827; resize: none; min-height: 70px; box-sizing: border-box; }
+.fv-ntarea:focus { outline: none; border-color: #1B4F8A; background: #fff; }
+.fv-photo-wrap { display: flex; flex-direction: column; gap: 10px; }
+.fv-photo-btn { width: 100%; background: #F5F4F0; border: 2px dashed #E2E5EA; border-radius: 12px; padding: 22px 16px; display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer; color: #6B7280; font-family: var(--sans); font-size: 14px; font-weight: 500; }
+.fv-photo-btn .cam { font-size: 30px; }
+.fv-photo-prev { display: none; border-radius: 12px; overflow: hidden; position: relative; aspect-ratio: 4/3; background: #111; }
+.fv-photo-prev img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fv-photo-rm { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); border: none; color: #fff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.fv-save-bar { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: #fff; border-top: 1px solid #E5E7EB; box-shadow: 0 -4px 20px rgba(0,0,0,.08); display: none; }
+.fv-save-bar.on { display: block; }
+.fv-btn-save { width: 100%; background: #1B4F8A; color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; font-family: var(--sans); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.fv-btn-save.ok { background: #22C55E; }
+.fv-submit-bar { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 16px; background: #fff; border-top: 1px solid #E5E7EB; box-shadow: 0 -4px 20px rgba(0,0,0,.08); display: none; }
+.fv-submit-bar.on { display: block; }
+.fv-btn-submit { width: 100%; background: #182535; color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 700; font-family: var(--sans); cursor: pointer; letter-spacing: .02em; }
+.fv-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(12px); background: #111827; color: #fff; padding: 9px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; opacity: 0; transition: all .25s; z-index: 1000; pointer-events: none; white-space: nowrap; }
+.fv-toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ==================== LANDING (temp — replace with login when server is ready) ==================== -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="role-box" style="max-width:440px;width:100%">
+    <div class="auth-logo" style="margin-bottom:20px"><strong>Maintenance Job Tracker</strong>Civilcraft Pty Ltd — select your role to continue</div>
+    <div class="role-cards">
+      <div class="role-card" onclick="chooseRole('supervisor')">
+        <div class="role-icon">🖥</div>
+        <div class="role-name">Site Supervisor</div>
+        <div class="role-desc">Full desktop — manage jobs, review logs and dashboard</div>
+      </div>
+      <div class="role-card" onclick="chooseRole('worker')">
+        <div class="role-icon">👷</div>
+        <div class="role-name">Field Worker</div>
+        <div class="role-desc">Mobile interface — update defect status and log daily work</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- role-selector kept for future login flow -->
+<div class="role-selector hidden" id="role-selector"></div>
+
+<!-- ==================== FIELD VIEW (worker) ==================== -->
+<div class="field-view" id="field-view">
+
+  <!-- Back header (hidden on job list screen) -->
+  <div class="fv-header" id="fv-header" style="display:none">
+    <button class="fv-back" onclick="fvBack()">‹</button>
+    <div style="flex:1;min-width:0">
+      <div class="fv-htitle" id="fv-title"></div>
+      <div class="fv-hsub" id="fv-sub"></div>
+    </div>
+  </div>
+
+  <!-- S1: Job list -->
+  <div class="fv-screen on" id="fv-s1">
+    <div class="fv-welcome">
+      <h1>Repair Tracker</h1>
+      <p id="fv-welcome-name">Welcome back</p>
+      <button class="fv-signout" style="margin-top:10px;display:inline-block" onclick="logout()">Sign out</button>
+    </div>
+    <div class="fv-sec-label">Your jobs</div>
+    <div class="fv-job-list" id="fv-job-list"></div>
+  </div>
+
+  <!-- S2: Defect list + daily card -->
+  <div class="fv-screen" id="fv-s2">
+    <div class="fv-daily-card">
+      <div class="fv-daily-hd"><span class="fv-daily-dot"></span> Today's log</div>
+      <div class="fv-daily-fields">
+        <div class="fv-dfield">
+          <label>Date</label>
+          <input type="date" id="fv-log-date" readonly>
+        </div>
+        <div class="fv-dfield">
+          <label>Start time <span class="req">*</span></label>
+          <input type="time" id="fv-log-time" oninput="fvCheckReq()">
+        </div>
+        <div class="fv-dfield">
+          <label>Labourers <span class="req">*</span></label>
+          <input type="number" id="fv-log-workers" placeholder="e.g. 3" min="1" oninput="fvCheckReq()">
+        </div>
+        <div class="fv-dfield">
+          <label>Man hours <span class="req">*</span></label>
+          <input type="number" id="fv-log-hrs" placeholder="e.g. 24" min="0" step="0.5" oninput="fvCheckReq()">
+        </div>
+      </div>
+      <div class="fv-save-row">
+        <button class="fv-btn-save-log" id="fv-btn-save-log" onclick="fvSaveLog()" disabled>💾 Save daily log</button>
+        <span class="fv-save-ts" id="fv-save-ts"></span>
+      </div>
+    </div>
+    <div class="fv-chips" id="fv-chips"></div>
+    <div class="fv-ftabs">
+      <button class="fv-ftab on" onclick="fvFilter('all',this)">All</button>
+      <button class="fv-ftab" onclick="fvFilter('pending',this)">Pending</button>
+      <button class="fv-ftab" onclick="fvFilter('precut',this)">Pre-cut</button>
+      <button class="fv-ftab" onclick="fvFilter('filledin',this)">Filled in</button>
+      <button class="fv-ftab" onclick="fvFilter('completed',this)">Done</button>
+    </div>
+    <div class="fv-dlist" id="fv-dlist"></div>
+  </div>
+
+  <!-- S3: Defect detail -->
+  <div class="fv-screen" id="fv-s3">
+    <div class="fv-detail-body">
+      <div class="fv-card">
+        <div class="fv-card-hd">Status</div>
+        <div class="fv-sgrid">
+          <button class="fv-sbtn sp" data-s="pending"   onclick="fvSetStatus('pending')"><span class="ico">⏳</span><span class="lbl">Pending</span></button>
+          <button class="fv-sbtn sc" data-s="precut"    onclick="fvSetStatus('precut')"><span class="ico">✂️</span><span class="lbl">Pre-cut</span></button>
+          <button class="fv-sbtn sf" data-s="filledin"  onclick="fvSetStatus('filledin')"><span class="ico">🪣</span><span class="lbl">Filled in</span></button>
+          <button class="fv-sbtn sd" data-s="completed" onclick="fvSetStatus('completed')"><span class="ico">✅</span><span class="lbl">Completed</span></button>
+        </div>
+      </div>
+      <div class="fv-card">
+        <div class="fv-card-hd">Initial dimensions — planned</div>
+        <div class="fv-card-bd">
+          <div class="fv-dgrid">
+            <div class="fv-dfield2"><label>Length</label><input id="fv-il" type="number" readonly><div class="unit">mm</div></div>
+            <div class="fv-dfield2" id="fv-iw-wrap"><label>Width</label><input id="fv-iw" type="number" readonly><div class="unit">mm</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="fv-card">
+        <div class="fv-card-hd">Final dimensions — actual</div>
+        <div class="fv-card-bd">
+          <div class="fv-dgrid">
+            <div class="fv-dfield2"><label>Length</label><input id="fv-fl" type="number" step="1" min="0" oninput="fvCalcArea()"><div class="unit">mm</div></div>
+            <div class="fv-dfield2" id="fv-fw-wrap"><label>Width</label><input id="fv-fw" type="number" step="1" min="0" oninput="fvCalcArea()"><div class="unit">mm</div></div>
+            <div class="fv-dfield2" id="fv-farea-wrap"><label>Area (auto)</label><input id="fv-farea" type="number" readonly><div class="unit">m²</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="fv-card">
+        <div class="fv-card-hd">Notes</div>
+        <div class="fv-card-bd">
+          <textarea class="fv-ntarea" id="fv-notes" placeholder="Site conditions, delays, observations…"></textarea>
+        </div>
+      </div>
+      <div class="fv-card">
+        <div class="fv-card-hd">Photo</div>
+        <div class="fv-card-bd">
+          <div class="fv-photo-wrap">
+            <input type="file" id="fv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="fvOnPhoto(event)">
+            <button class="fv-photo-btn" id="fv-photo-btn" onclick="document.getElementById('fv-photo-input').click()">
+              <span class="cam">📷</span>Take a photo of the repair
+            </button>
+            <div class="fv-photo-prev" id="fv-photo-prev">
+              <img id="fv-photo-img" src="" alt="Repair photo">
+              <button class="fv-photo-rm" onclick="fvRmPhoto()">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save bar (defect detail) -->
+  <div class="fv-save-bar" id="fv-save-bar">
+    <button class="fv-btn-save" id="fv-btn-save" onclick="fvSaveDef()">💾 Save changes</button>
+  </div>
+  <!-- Submit bar (defect list) -->
+  <div class="fv-submit-bar" id="fv-submit-bar">
+    <button class="fv-btn-submit" onclick="fvSubmitDay()">📤 Submit day's work</button>
+  </div>
+</div>
+<div class="fv-toast" id="fv-toast"></div>
+
+<div class="shell" style="display:none">
+
+  <!-- SIDEBAR (desktop) -->
+  <nav class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-logo"><strong>Maintenance</strong>Job Tracker</div>
+      <div class="job-bar">
+        <select id="job-select" onchange="switchJob(this.value)">
+          <option value="">— Select job —</option>
+        </select>
+        <button class="btn-newjob" onclick="createJob()">+ New job</button>
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item active" data-page="setup"        onclick="showPage('setup',this)"><span class="nav-icon">⚙</span> Job setup</button>
+      <button class="nav-item"        data-page="defects"      onclick="showPage('defects',this)"><span class="nav-icon">☰</span> Defect list</button>
+      <button class="nav-item"        data-page="daily"        onclick="showPage('daily',this);markNotifsRead()"><span class="nav-icon">📅</span> Daily log<span class="notif-badge" id="notif-badge" style="display:none">0</span></button>
+      <button class="nav-item"        data-page="dashboard"    onclick="showPage('dashboard',this)"><span class="nav-icon">◫</span> Dashboard</button>
+      <button class="nav-item"        data-page="productivity" onclick="showPage('productivity',this)"><span class="nav-icon">⚡</span> Productivity</button>
+      <button class="nav-item"        data-page="team"         onclick="showPage('team',this)" id="nav-team"><span class="nav-icon">👥</span> Team</button>
+    </div>
+    <div class="sidebar-footer">
+      <span class="sidebar-user" id="sidebar-username"></span>
+      <button class="btn-signout" onclick="logout()">Sign out</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- Mobile top bar -->
+    <div class="mobile-topbar">
+      <select id="job-select-m" onchange="switchJob(this.value)">
+        <option value="">— Select job —</option>
+      </select>
+      <button class="btn-newjob-m" onclick="createJob()" title="New job">+</button>
+    </div>
+
+    <!-- ==================== SETUP ==================== -->
+    <div id="page-setup" class="page active">
+      <div class="page-inner">
+        <div class="page-header flex-between">
+          <div><h1>Job setup</h1><p>Configure the job before importing your defect list</p></div>
+          <button class="btn btn-danger btn-sm" onclick="deleteJob()">Delete job</button>
+        </div>
+        <div class="card">
+          <div class="form-grid c2">
+            <div class="field"><label>Job name</label><input id="job-name" type="text" placeholder="e.g. Westfield Car Park Maintenance" oninput="autoSaveSetup()"></div>
+            <div class="field"><label>Client</label><input id="job-client" type="text" placeholder="e.g. Scentre Group" oninput="autoSaveSetup()"></div>
+          </div>
+          <div class="form-grid c3">
+            <div class="field"><label>Location</label><input id="job-location" type="text" placeholder="e.g. Sydney CBD" oninput="autoSaveSetup()"></div>
+            <div class="field"><label>Start date</label><input id="job-start" type="date" onchange="autoSaveSetup()"></div>
+            <div class="field"><label>Shift length (hrs)</label><input id="job-shift" type="number" value="8" min="1" max="24" onchange="autoSaveSetup()"></div>
+          </div>
+          <div class="form-grid c2">
+            <div class="field">
+              <label>Planned labour count <span id="labour-tag" style="display:none" class="auto-tag">from Excel</span></label>
+              <input id="job-labour" type="number" placeholder="e.g. 2" min="1" onchange="autoSaveSetup()">
+            </div>
+            <div class="field">
+              <label>Budgeted labour days <span id="budget-tag" style="display:none" class="auto-tag">auto-calculated</span></label>
+              <input id="job-budget-days" type="number" placeholder="Auto-calculated on import" min="0.01" step="0.01" onchange="autoSaveSetup()">
+            </div>
+          </div>
+          <div id="budget-breakdown" style="display:none" class="alert alert-info"></div>
+          <div id="setup-alert"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== DEFECT LIST ==================== -->
+    <div id="page-defects" class="page">
+      <div class="page-inner">
+        <div class="page-header flex-between">
+          <div><h1>Defect list</h1><p>Import from Excel or add defects manually</p></div>
+          <div class="btn-row">
+            <button class="btn btn-success" onclick="document.getElementById('import-file-input').click()">↑ Import Excel</button>
+            <button class="btn btn-primary" onclick="openAddDefect()">+ Add defect</button>
+          </div>
+        </div>
+        <input type="file" id="import-file-input" accept=".xlsx,.xlsm,.xls" onchange="handleFileImport(event)">
+
+        <div id="import-preview" style="display:none" class="card">
+          <div class="flex-between" style="margin-bottom:10px"><strong>Import preview</strong><button class="btn btn-sm" onclick="cancelImport()">Cancel</button></div>
+          <div id="import-summary" class="alert alert-info"></div>
+          <div class="preview-scroll">
+            <table><thead><tr><th>#</th><th>Defect No.</th><th>Type</th><th>Location</th><th>L (mm)</th><th>W (mm)</th><th>Size</th><th>Metric</th></tr></thead>
+            <tbody id="import-preview-body"></tbody></table>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-success" onclick="confirmImport()">✓ Confirm import</button>
+            <button class="btn btn-danger btn-sm" onclick="cancelImport()">Cancel</button>
+          </div>
+        </div>
+        <div id="import-alert"></div>
+
+        <div id="add-defect-form" style="display:none" class="card">
+          <div class="card-title">Add defect</div>
+          <div class="form-grid c4">
+            <div class="field"><label>Defect #</label><input id="d-num" type="text" placeholder="e.g. 1"></div>
+            <div class="field"><label>Repair type</label><select id="d-type" onchange="updateMetric()"></select></div>
+            <div class="field"><label>Location</label><select id="d-loc"><option value="internal">Internal</option><option value="external">External</option></select></div>
+            <div class="field"><label>Metric</label><input id="d-metric" type="text" readonly></div>
+          </div>
+          <div class="form-grid c2">
+            <div class="field"><label id="d-size-label">Planned size</label><input id="d-size" type="number" step="0.01" placeholder="0.00"></div>
+            <div id="d-width-wrap" style="display:none" class="field"><label>Width (m)</label><input id="d-width" type="number" step="0.01" placeholder="0.00"></div>
+          </div>
+          <div class="form-grid" style="grid-template-columns:1fr">
+            <div class="field"><label>Notes (optional)</label><input id="d-notes" type="text" placeholder="Any additional info"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-sm" onclick="saveDefect()">Save defect</button>
+            <button class="btn btn-sm" onclick="closeAddDefect()">Cancel</button>
+          </div>
+        </div>
+
+        <div id="defect-table-wrap">
+          <div class="empty-state"><span class="icon">☰</span>No defects yet. Import from Excel or add manually.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== DAILY LOG ==================== -->
+    <div id="page-daily" class="page">
+      <div class="page-inner">
+        <div class="page-header flex-between">
+          <div><h1>Daily log</h1><p>Log today's progress</p></div>
+          <button class="btn" onclick="exportDailyPDF()">⬇ Export PDF</button>
+        </div>
+        <div class="card">
+          <div class="form-grid c3">
+            <div class="field"><label>Date</label><input id="log-date" type="date"></div>
+            <div class="field"><label>Labourers on site (headcount)</label><input id="log-workers" type="number" placeholder="e.g. 2" min="1"></div>
+            <div class="field"><label>Total hours worked by team</label><input id="log-total-hrs" type="number" placeholder="e.g. 16" step="0.5" min="0"></div>
+          </div>
+          <button class="btn" onclick="calcEquiv()" style="margin-bottom:12px">⊞ Calculate equivalent days</button>
+          <div id="log-equiv" style="display:none">
+            <div class="equiv-grid">
+              <div class="equiv-box"><div class="val" id="eq-headcount">—</div><div class="lbl">Labourers on site</div></div>
+              <div class="equiv-box"><div class="val" id="eq-days">—</div><div class="lbl">Equivalent labour days</div><div class="diff" id="eq-diff"></div></div>
+            </div>
+          </div>
+          <hr class="divider">
+          <div class="flex-between" style="margin-bottom:9px">
+            <strong>Repairs worked on today</strong>
+            <div class="inline-flex text-sm text-muted">
+              <span><span class="dot dot-completed" style="display:inline-block"></span>Completed</span>
+              <span><span class="dot dot-precut" style="display:inline-block"></span>Pre-cut</span>
+              <span><span class="dot dot-filledin" style="display:inline-block"></span>Filled in</span>
+            </div>
+          </div>
+          <div id="log-defects-table-wrap">
+            <div class="empty-state" style="padding:28px"><span class="icon">📋</span>No defects loaded yet.</div>
+          </div>
+          <hr class="divider">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveLog()">💾 Save daily log</button>
+            <span id="log-save-msg" style="font-size:12px;color:var(--green);display:none"></span>
+          </div>
+        </div>
+        <div id="log-history"></div>
+      </div>
+    </div>
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <div id="page-dashboard" class="page">
+      <div class="page-inner">
+        <div class="page-header flex-between">
+          <div><h1>Dashboard</h1><p>Live project metrics and status overview</p></div>
+          <button class="btn" onclick="exportSummaryPDF()">⬇ Export summary PDF</button>
+        </div>
+        <div id="dash-content">
+          <div class="empty-state"><span class="icon">◫</span>Add defects and log progress to see your dashboard.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PRODUCTIVITY ==================== -->
+    <div id="page-productivity" class="page">
+      <div class="page-inner">
+        <div class="page-header"><h1>Productivity</h1><p>Rates per 1 labour per hour — used for forecasting</p></div>
+        <div class="alert alert-info">Edit any rate and save. Setting up time applies to every repair.</div>
+        <div class="setup-time-card">
+          <div><div class="title">Setting up time per repair</div><div class="desc">Time to move and set up between repairs</div></div>
+          <div class="setup-time-input-row">
+            <div class="field" style="margin:0"><input type="number" id="setup-time-input" value="0.2533" step="0.0001" min="0" oninput="updateSetupMins()"></div>
+            <span class="text-muted">hrs</span>
+            <span id="setup-time-mins" class="text-xs">≈ 15.2 min</span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Code</th><th>Repair type</th><th>Metric</th><th>Internal rate</th><th>External rate</th><th>Forecast</th></tr></thead>
+          <tbody id="rates-body"></tbody></table>
+        </div>
+        <div class="mt8"><button class="btn btn-primary" onclick="saveRates()">💾 Save rates</button></div>
+      </div>
+    </div>
+
+    <!-- ==================== TEAM ==================== -->
+    <div id="page-team" class="page">
+      <div class="page-inner">
+        <div class="page-header flex-between">
+          <div><h1>Team</h1><p>Manage worker accounts and job assignments</p></div>
+          <button class="btn btn-primary btn-sm" onclick="openAddUser()">+ Add worker</button>
+        </div>
+
+        <!-- Add user form -->
+        <div id="add-user-form" class="card" style="display:none;margin-bottom:16px">
+          <div class="card-title">New worker account</div>
+          <div class="form-grid c3">
+            <div class="field"><label>Username</label><input id="new-username" type="text" placeholder="e.g. john.smith"></div>
+            <div class="field"><label>Temporary password</label><input id="new-password" type="text" placeholder="e.g. Welcome1"></div>
+            <div class="field"><label>Display name</label><input id="new-displayname" type="text" placeholder="e.g. John Smith"></div>
+          </div>
+          <div class="field mt8"><label>Assign to jobs</label><div id="new-job-assign" class="checkbox-list"></div></div>
+          <div id="add-user-err" class="alert alert-warning" style="display:none;margin-top:10px"></div>
+          <div class="btn-row mt8">
+            <button class="btn btn-primary btn-sm" onclick="saveNewUser()">Create account</button>
+            <button class="btn btn-sm" onclick="closeAddUser()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Edit worker panel -->
+        <div id="edit-worker-panel" class="card" style="display:none;margin-bottom:16px">
+          <div class="card-title">Edit worker — <span id="edit-worker-name"></span></div>
+          <div class="form-grid c3">
+            <div class="field"><label>New password <span style="color:var(--text-3)">(blank = keep current)</span></label><input id="edit-password" type="text" placeholder="Leave blank to keep"></div>
+            <div class="field"><label>Display name</label><input id="edit-displayname" type="text"></div>
+          </div>
+          <div class="field mt8"><label>Assign to jobs</label><div id="edit-job-assign" class="checkbox-list"></div></div>
+          <div class="btn-row mt8">
+            <button class="btn btn-primary btn-sm" onclick="saveEditWorker()">Save changes</button>
+            <button class="btn btn-sm" id="btn-deactivate" onclick="deactivateWorker()">Deactivate</button>
+            <button class="btn btn-sm" onclick="closeEditWorker()">Cancel</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0">
+          <div id="team-list"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- BOTTOM NAV (mobile) -->
+<nav class="bottom-nav">
+  <button class="bottom-nav-item active" data-page="setup"        onclick="showPage('setup',this)"><span class="nav-icon">⚙</span>Setup</button>
+  <button class="bottom-nav-item"        data-page="defects"      onclick="showPage('defects',this)"><span class="nav-icon">☰</span>Defects</button>
+  <button class="bottom-nav-item"        data-page="daily"        onclick="showPage('daily',this)"><span class="nav-icon">📅</span>Daily</button>
+  <button class="bottom-nav-item"        data-page="dashboard"    onclick="showPage('dashboard',this)"><span class="nav-icon">◫</span>Dashboard</button>
+  <button class="bottom-nav-item"        data-page="productivity" onclick="showPage('productivity',this)"><span class="nav-icon">⚡</span>Rates</button>
+</nav>
+
+<script>
+// ============================================================
+// REPAIR TYPES
+// ============================================================
+const REPAIR_TYPES = [
+  {code:'1',  name:'Crack Repair',                    metric:'l/m',     intRate:4,    extRate:4,    forecast:true},
+  {code:'1a', name:'Resin Inject Crack Repair',       metric:'l/m',     intRate:4,    extRate:4,    forecast:true},
+  {code:'2',  name:'Joint Reseal',                    metric:'l/m',     intRate:5,    extRate:5,    forecast:true},
+  {code:'2a', name:'Wide Joint Reseal',               metric:'l/m',     intRate:4,    extRate:4,    forecast:true},
+  {code:'2b', name:'Armour Joint Reseal',             metric:'l/m',     intRate:5,    extRate:5,    forecast:true},
+  {code:'3',  name:'Joint Repair',                    metric:'m2',      intRate:0.5,  extRate:0.5,  forecast:true},
+  {code:'3a', name:'Armoured Joint Edge Repair',      metric:'m2',      intRate:1,    extRate:1,    forecast:true},
+  {code:'3s', name:'Joint Spall Repair',              metric:'m2',      intRate:0.05, extRate:0.05, forecast:true},
+  {code:'4',  name:'Surface Damage',                  metric:'m2',      intRate:0.75, extRate:0.75, forecast:true},
+  {code:'5',  name:'Delamination Repair',             metric:'m2',      intRate:0.75, extRate:0.75, forecast:true},
+  {code:'6a', name:'Dyna Bolt Top & Fill',            metric:'per bolt',intRate:30,   extRate:30,   forecast:true},
+  {code:'6b', name:'Dyna Bolt Core & Fill',           metric:'per bolt',intRate:15,   extRate:15,   forecast:true},
+  {code:'6c', name:'Dyna Bolt Surface Patch Repair',  metric:'per bolt',intRate:4,    extRate:4,    forecast:true},
+  {code:'7',  name:'Corner Slab Repair',              metric:'m2',      intRate:0.5,  extRate:0.5,  forecast:true},
+  {code:'8a', name:'Joint Stabiliser (Rocking Slab)', metric:'joint',   intRate:0,    extRate:0,    forecast:false},
+  {code:'8b', name:'Resin Inject (Rocking - Int)',    metric:'m2',      intRate:0,    extRate:0,    forecast:false},
+  {code:'8c', name:'Resin Inject (Rocking - Ext)',    metric:'m2',      intRate:0,    extRate:0,    forecast:false},
+  {code:'8d', name:'Full Slab Replacement',           metric:'m2',      intRate:0,    extRate:0,    forecast:false},
+  {code:'9',  name:'Demarcation Removal',             metric:'m2',      intRate:0,    extRate:0,    forecast:false},
+  {code:'10', name:'Glue, Paint & Tyre Mark Removal', metric:'m2',      intRate:0,    extRate:0,    forecast:false},
+  {code:'11a',name:'Minor Concrete Grate Repair',     metric:'m2',      intRate:0.5,  extRate:0.5,  forecast:true},
+  {code:'11b',name:'Major Concrete Grate Repair',     metric:'m2',      intRate:0.5,  extRate:0.5,  forecast:true},
+  {code:'12a',name:'Lip Grind (Internal)',            metric:'l/m',     intRate:6,    extRate:6,    forecast:true},
+  {code:'12b',name:'Lip Grind (External)',            metric:'l/m',     intRate:6,    extRate:6,    forecast:true},
+  {code:'13', name:'Kerb & Gutter Repair',            metric:'l/m',     intRate:0.5,  extRate:0.5,  forecast:true},
+];
+
+const STATUSES = {
+  pending:  {label:'Pending',   bClass:'b-pending',  dClass:'dr-pending',  lClass:''},
+  precut:   {label:'Pre-cut',   bClass:'b-precut',   dClass:'dr-precut',   lClass:'lr-precut'},
+  filledin: {label:'Filled in', bClass:'b-filledin', dClass:'dr-filledin', lClass:'lr-filledin'},
+  completed:{label:'Completed', bClass:'b-completed',dClass:'dr-completed',lClass:'lr-completed'},
+};
+
+// ============================================================
+// STATE  —  one "active job" at a time, all jobs in localStorage
+// ============================================================
+const LS_JOBS    = 'cmt_jobs';       // array of {id, name}
+const LS_ACTIVE  = 'cmt_active';     // active job id
+const LS_JOB_PFX = 'cmt_job_';      // prefix for per-job data blob
+
+let activeJobId = null;
+let setup = {name:'',client:'',location:'',start:'',shift:8,labour:0,budgetDays:0};
+let rates = JSON.parse(JSON.stringify(REPAIR_TYPES));
+let setupTime = 0.2533;
+let defects = [], logs = [], pendingImport = null;
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function allJobs() {
+  try { return JSON.parse(localStorage.getItem(LS_JOBS) || '[]'); } catch { return []; }
+}
+function saveJobList(arr) { localStorage.setItem(LS_JOBS, JSON.stringify(arr)); }
+
+function loadJobData(id) {
+  try {
+    const raw = localStorage.getItem(LS_JOB_PFX + id);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function persistJobData() {
+  if (!activeJobId) return;
+  localStorage.setItem(LS_JOB_PFX + activeJobId, JSON.stringify({ setup, rates, setupTime, defects, logs }));
+  // Keep job name in list in sync
+  const jobs = allJobs();
+  const j = jobs.find(x => x.id === activeJobId);
+  if (j && j.name !== setup.name) {
+    j.name = setup.name;
+    saveJobList(jobs);
+    refreshJobSelects(jobs);
+  }
+}
+
+// ============================================================
+// JOB MANAGEMENT
+// ============================================================
+function refreshJobSelects(jobs) {
+  const opts = jobs.map(j => `<option value="${j.id}">${j.name || 'Untitled job'}</option>`).join('');
+  const ph = '<option value="">— Select job —</option>';
+  ['job-select','job-select-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = ph + opts; el.value = activeJobId || ''; }
+  });
+}
+
+function createJob() {
+  const id = 'job_' + Date.now();
+  const jobs = allJobs();
+  jobs.unshift({id, name: 'New job'});
+  saveJobList(jobs);
+  localStorage.setItem(LS_JOB_PFX + id, JSON.stringify({
+    setup: {name:'New job',client:'',location:'',start:today(),shift:8,labour:0,budgetDays:0},
+    rates: JSON.parse(JSON.stringify(REPAIR_TYPES)),
+    setupTime: 0.2533, defects: [], logs: []
+  }));
+  switchJob(id);
+}
+
+function switchJob(id) {
+  activeJobId = id;
+  localStorage.setItem(LS_ACTIVE, id);
+
+  const jobs = allJobs();
+  refreshJobSelects(jobs);
+
+  if (!id) return;
+  const data = loadJobData(id);
+  if (!data) return;
+
+  setup     = data.setup     || {name:'',client:'',location:'',start:today(),shift:8,labour:0,budgetDays:0};
+  rates     = data.rates     || JSON.parse(JSON.stringify(REPAIR_TYPES));
+  setupTime = data.setupTime !== undefined ? data.setupTime : 0.2533;
+  defects   = data.defects   || [];
+  logs      = data.logs      || [];
+
+  populateSetupForm();
+  renderRates();
+  renderDefectTable();
+  renderDailyLogTable();
+  renderDashboard();
+  renderLogHistory();
+}
+
+function deleteJob() {
+  if (!activeJobId) return;
+  const name = setup.name || 'this job';
+  if (!confirm(`Delete "${name}" and all its data? This cannot be undone.`)) return;
+  const jobs = allJobs().filter(j => j.id !== activeJobId);
+  saveJobList(jobs);
+  localStorage.removeItem(LS_JOB_PFX + activeJobId);
+  activeJobId = null;
+  setup = {name:'',client:'',location:'',start:today(),shift:8,labour:0,budgetDays:0};
+  rates = JSON.parse(JSON.stringify(REPAIR_TYPES));
+  setupTime = 0.2533; defects = []; logs = [];
+  refreshJobSelects(jobs);
+  populateSetupForm();
+  renderDefectTable();
+  renderDailyLogTable();
+  renderDashboard();
+  renderLogHistory();
+  document.getElementById('budget-breakdown').style.display = 'none';
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(function init() {
+  // Always show the landing (role picker) on load
+  // Job data is initialized once a role is chosen
+
+  // Pre-load job data so the supervisor app is ready when selected
+  const jobs = allJobs();
+  if (!jobs.length) {
+    const id = 'job_' + Date.now();
+    saveJobList([{id, name: 'My First Job'}]);
+    localStorage.setItem(LS_JOB_PFX + id, JSON.stringify({
+      setup: {name:'My First Job',client:'',location:'',start:today(),shift:8,labour:0,budgetDays:0},
+      rates: JSON.parse(JSON.stringify(REPAIR_TYPES)),
+      setupTime: 0.2533, defects: [], logs: []
+    }));
+    switchJob(id);
+  } else {
+    const lastId = localStorage.getItem(LS_ACTIVE);
+    const id = (lastId && jobs.find(j => j.id === lastId)) ? lastId : jobs[0].id;
+    refreshJobSelects(jobs);
+    switchJob(id);
+  }
+  document.getElementById('log-date').value = today();
+  // Landing screen is shown by default (shell is display:none, auth-overlay is visible)
+})();
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getRate(code) {
+  const s = String(code).trim().toLowerCase();
+  return rates.find(r => r.code.toLowerCase() === s) || null;
+}
+function statusBadge(st) {
+  const s = STATUSES[st] || STATUSES.pending;
+  return `<span class="badge ${s.bClass}">${s.label}</span>`;
+}
+function statusOptions(cur) {
+  return Object.entries(STATUSES).map(([k,v]) => `<option value="${k}" ${cur===k?'selected':''}>${v.label}</option>`).join('');
+}
+function defectRowClass(st) { return (STATUSES[st]||STATUSES.pending).dClass; }
+function logRowClass(st)    { return (STATUSES[st]||STATUSES.pending).lClass; }
+
+function calcBudgetedDays(defectList, labourCount, shiftHrs, st) {
+  if (!labourCount || !shiftHrs) return {days:0, productivityHrs:0, setupHrs:0, totalHrs:0, hpd:0, breakdown:[]};
+  const hpd = labourCount * shiftHrs;
+  let productivityHrs = 0; const breakdown = [];
+  defectList.forEach(d => {
+    const r = getRate(d.code); if (!r || !r.forecast) return;
+    const rate = d.loc === 'internal' ? r.intRate : r.extRate; if (!rate) return;
+    const hrs = d.plannedQty / rate; productivityHrs += hrs;
+    breakdown.push({code:d.code, name:r.name, qty:d.plannedQty, metric:d.metric, rate, hrs});
+  });
+  const setupHrs = defectList.length * st;
+  const totalHrs = productivityHrs + setupHrs;
+  return {days: totalHrs/hpd, productivityHrs, setupHrs, totalHrs, hpd, breakdown};
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showPage(p, triggerEl) {
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .bottom-nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  document.querySelectorAll(`[data-page="${p}"]`).forEach(el => el.classList.add('active'));
+  if (p === 'dashboard')    renderDashboard();
+  if (p === 'defects')      renderDefectTable();
+  if (p === 'daily')        { renderDailyLogTable(); renderLogHistory(); }
+  if (p === 'productivity') renderRates();
+  if (p === 'team')         renderTeamPage();
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+function populateSetupForm() {
+  document.getElementById('job-name').value       = setup.name || '';
+  document.getElementById('job-client').value     = setup.client || '';
+  document.getElementById('job-location').value   = setup.location || '';
+  document.getElementById('job-start').value      = setup.start || today();
+  document.getElementById('job-shift').value      = setup.shift || 8;
+  document.getElementById('job-labour').value     = setup.labour || '';
+  document.getElementById('job-budget-days').value= setup.budgetDays > 0 ? setup.budgetDays.toFixed(2) : '';
+}
+
+function autoSaveSetup() {
+  setup.name       = document.getElementById('job-name').value;
+  setup.client     = document.getElementById('job-client').value;
+  setup.location   = document.getElementById('job-location').value;
+  setup.start      = document.getElementById('job-start').value;
+  setup.shift      = parseFloat(document.getElementById('job-shift').value) || 8;
+  setup.labour     = parseInt(document.getElementById('job-labour').value) || 0;
+  setup.budgetDays = parseFloat(document.getElementById('job-budget-days').value) || 0;
+  persistJobData();
+
+  // Flash saved indicator
+  const el = document.getElementById('setup-alert');
+  el.innerHTML = '<div class="alert alert-success" style="padding:6px 10px;font-size:12px">✓ Saved</div>';
+  clearTimeout(autoSaveSetup._t);
+  autoSaveSetup._t = setTimeout(() => el.innerHTML = '', 1500);
+}
+
+// ============================================================
+// EXCEL IMPORT
+// ============================================================
+function handleFileImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      const ws = wb.Sheets['Master'];
+      if (!ws) { showImportAlert('Sheet "Master" not found.', 'danger'); return; }
+      parseImportRows(XLSX.utils.sheet_to_json(ws, {header:1, defval:null}));
+    } catch(err) { showImportAlert('Error: ' + err.message, 'danger'); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+function findNumberOfStaff(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][22] === 'Number of Staff') {
+      const val = rows[i+2] ? rows[i+2][22] : null;
+      if (val != null && !isNaN(parseFloat(val))) return parseInt(val);
+    }
+  }
+  return 0;
+}
+
+function parseImportRows(rows) {
+  const importedLabour = findNumberOfStaff(rows);
+  const parsed = []; let skipped = 0;
+  for (let i = 2; i < rows.length; i++) {
+    const row = rows[i];
+    const defectNo = row[1];
+    if (defectNo === null || defectNo === undefined || defectNo === '') continue;
+    const r = getRate(String(row[2]));
+    if (!r) { skipped++; continue; }
+    const loc = String(row[7] || '').toLowerCase().trim();
+    parsed.push({
+      id: Date.now() + i,
+      num: String(defectNo), code: r.code, name: r.name, metric: r.metric,
+      loc: loc === 'external' ? 'external' : 'internal',
+      plannedQty: parseFloat(row[6]) || 0,
+      Lmm: row[3], Wmm: row[4],
+      notes: '', actualQty: 0, status: 'pending'
+    });
+  }
+  if (!parsed.length) { showImportAlert('No valid defects found.', 'danger'); return; }
+  const shiftHrs = parseFloat(document.getElementById('job-shift').value) || 8;
+  const st = parseFloat(document.getElementById('setup-time-input').value) || setupTime;
+  const fc = calcBudgetedDays(parsed, importedLabour, shiftHrs, st);
+  pendingImport = {defects: parsed, labour: importedLabour, budgetDays: fc.days, fc, skipped, st};
+  document.getElementById('import-preview').style.display = 'block';
+  let s = `Found <strong>${parsed.length} defects</strong> — all set to Pending.`;
+  if (skipped > 0) s += ` (${skipped} skipped — unrecognised type)`;
+  if (importedLabour) s += `<br>Staff: <strong>${importedLabour}</strong> × ${shiftHrs}hr shift = ${fc.hpd} hrs/day | Productivity: ${fc.productivityHrs.toFixed(2)} + Setup: ${fc.setupHrs.toFixed(2)} = <strong>${fc.totalHrs.toFixed(2)} hrs</strong> ÷ ${fc.hpd} = <strong>${fc.days.toFixed(2)} days</strong>`;
+  document.getElementById('import-summary').innerHTML = s;
+  document.getElementById('import-preview-body').innerHTML = parsed.map((d,i) => `<tr>
+    <td>${i+1}</td><td><strong>${d.num}</strong></td><td>${d.code} — ${d.name}</td>
+    <td><span class="badge ${d.loc==='internal'?'b-int':'b-ext'}">${d.loc}</span></td>
+    <td>${d.Lmm != null ? d.Lmm : '—'}</td><td>${d.Wmm != null ? d.Wmm : '—'}</td>
+    <td>${d.plannedQty.toFixed(4)}</td><td>${d.metric}</td>
+  </tr>`).join('');
+}
+
+function confirmImport() {
+  if (defects.length > 0 && !confirm(`Replace existing ${defects.length} defect(s)?`)) return;
+  const pi = pendingImport;
+  defects = pi.defects.map(d => ({...d}));
+  if (pi.labour) {
+    document.getElementById('job-labour').value = pi.labour;
+    document.getElementById('labour-tag').style.display = 'inline';
+    setup.labour = pi.labour;
+  }
+  if (pi.budgetDays) {
+    document.getElementById('job-budget-days').value = pi.budgetDays.toFixed(2);
+    document.getElementById('budget-tag').style.display = 'inline';
+    setup.budgetDays = pi.budgetDays;
+    const brows = pi.fc.breakdown.map(b =>
+      `<tr style="font-size:12px"><td>${b.code} — ${b.name}</td><td>${b.qty.toFixed(4)} ${b.metric}</td><td>${b.rate}/hr</td><td>${b.hrs.toFixed(2)} hrs</td></tr>`
+    ).join('');
+    document.getElementById('budget-breakdown').style.display = 'block';
+    document.getElementById('budget-breakdown').innerHTML = `<strong>Budget breakdown</strong>
+      <div style="margin:5px 0;font-size:12px">Productivity: <strong>${pi.fc.productivityHrs.toFixed(2)} hrs</strong> + Setup (${pi.defects.length} × ${(pi.st*60).toFixed(1)} min): <strong>${pi.fc.setupHrs.toFixed(2)} hrs</strong> = <strong>${pi.fc.totalHrs.toFixed(2)} hrs</strong> ÷ ${pi.fc.hpd} = <strong>${pi.budgetDays.toFixed(2)} days</strong></div>
+      <div class="table-wrap"><table style="font-size:12px"><thead><tr><th>Type</th><th>Qty</th><th>Rate</th><th>Hours</th></tr></thead><tbody>${brows}</tbody></table></div>`;
+  }
+  pendingImport = null;
+  document.getElementById('import-preview').style.display = 'none';
+  persistJobData();
+  showImportAlert(`Imported ${defects.length} defects.`, 'success');
+  renderDefectTable();
+  setTimeout(() => document.getElementById('import-alert').innerHTML = '', 5000);
+}
+
+function cancelImport() { pendingImport = null; document.getElementById('import-preview').style.display = 'none'; }
+function showImportAlert(msg, type) {
+  document.getElementById('import-alert').innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  if (type === 'success') setTimeout(() => document.getElementById('import-alert').innerHTML = '', 5000);
+}
+
+// ============================================================
+// DEFECT MANAGEMENT
+// ============================================================
+function openAddDefect() {
+  document.getElementById('add-defect-form').style.display = 'block';
+  document.getElementById('d-type').innerHTML = rates.map(r => `<option value="${r.code}">${r.code} — ${r.name}</option>`).join('');
+  updateMetric();
+}
+function closeAddDefect() { document.getElementById('add-defect-form').style.display = 'none'; }
+
+function updateMetric() {
+  const r = getRate(document.getElementById('d-type').value); if (!r) return;
+  document.getElementById('d-metric').value = r.metric;
+  const isArea = r.metric === 'm2';
+  document.getElementById('d-width-wrap').style.display = isArea ? 'block' : 'none';
+  document.getElementById('d-size-label').textContent = isArea ? 'Length (m)' : 'Planned size (' + r.metric + ')';
+}
+
+function saveDefect() {
+  const code = document.getElementById('d-type').value;
+  const r = getRate(code);
+  const loc = document.getElementById('d-loc').value;
+  const size = parseFloat(document.getElementById('d-size').value) || 0;
+  const width = parseFloat(document.getElementById('d-width').value) || 0;
+  const isArea = r.metric === 'm2';
+  defects.push({
+    id: Date.now(), num: document.getElementById('d-num').value,
+    code, name: r.name, metric: r.metric, loc,
+    plannedQty: isArea ? size * width : size,
+    Lmm: size * 1000, Wmm: isArea ? width * 1000 : null,
+    notes: document.getElementById('d-notes').value,
+    actualQty: 0, status: 'pending'
+  });
+  closeAddDefect();
+  persistJobData();
+  renderDefectTable();
+  ['d-num','d-size','d-width','d-notes'].forEach(id => document.getElementById(id).value = '');
+}
+
+function removeDefect(id) {
+  if (!confirm('Remove this defect?')) return;
+  defects = defects.filter(d => d.id !== id);
+  persistJobData();
+  renderDefectTable();
+}
+
+function renderDefectTable() {
+  const wrap = document.getElementById('defect-table-wrap');
+  if (!defects.length) { wrap.innerHTML = '<div class="empty-state"><span class="icon">☰</span>No defects yet.</div>'; return; }
+  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    <th>#</th><th>Defect No.</th><th>Type</th><th>Location</th>
+    <th>L (mm)</th><th>W (mm)</th><th>Planned</th><th>Status</th><th>Forecast</th><th></th>
+  </tr></thead><tbody>${defects.map((d,i) => {
+    const r = getRate(d.code);
+    let plannedM = '—';
+    if (d.metric === 'm2' && d.Lmm != null && d.Wmm != null) plannedM = ((parseFloat(d.Lmm)/1000)*(parseFloat(d.Wmm)/1000)).toFixed(4)+' m²';
+    else if (d.metric === 'l/m' && d.Lmm != null) plannedM = (parseFloat(d.Lmm)/1000).toFixed(4)+' m';
+    else plannedM = d.plannedQty.toFixed(4)+' '+d.metric;
+    return `<tr class="${defectRowClass(d.status)}">
+      <td class="text-xs">${i+1}</td><td><strong>${d.num}</strong></td>
+      <td class="text-sm">${d.code} — ${d.name}</td>
+      <td><span class="badge ${d.loc==='internal'?'b-int':'b-ext'}">${d.loc}</span></td>
+      <td class="text-mono text-sm">${d.Lmm != null ? parseFloat(d.Lmm).toLocaleString()+' mm' : '—'}</td>
+      <td class="text-mono text-sm">${d.Wmm != null ? parseFloat(d.Wmm).toLocaleString()+' mm' : '—'}</td>
+      <td class="text-mono text-sm">${plannedM}</td>
+      <td>${statusBadge(d.status)}</td>
+      <td>${r && r.forecast ? '<span class="badge b-yes">Yes</span>' : '<span class="badge b-no">Excl.</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeDefect(${d.id})">✕</button></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+// ============================================================
+// DAILY LOG
+// ============================================================
+function renderDailyLogTable() {
+  const wrap = document.getElementById('log-defects-table-wrap');
+  if (!defects.length) { wrap.innerHTML = '<div class="empty-state" style="padding:28px"><span class="icon">📋</span>No defects loaded yet.</div>'; return; }
+  wrap.innerHTML = `<div class="table-wrap"><table class="log-tbl"><thead><tr>
+    <th>Defect No.</th><th>Type</th><th>Location</th><th>Metric</th>
+    <th>L planned (mm)</th><th>W planned (mm)</th>
+    <th>Real L today</th><th>Real W today</th><th>Qty today</th><th>Status</th>
+  </tr></thead><tbody>${defects.map(d => {
+    const isArea = d.metric === 'm2', isLinear = d.metric === 'l/m';
+    return `<tr id="logrow-${d.id}" class="${logRowClass(d.status)}">
+      <td><strong>${d.num}</strong></td>
+      <td class="text-sm">${d.code} — ${d.name}</td>
+      <td><span class="badge ${d.loc==='internal'?'b-int':'b-ext'}" style="font-size:10px">${d.loc}</span></td>
+      <td class="text-sm">${d.metric}</td>
+      <td class="text-mono text-sm">${d.Lmm != null ? parseFloat(d.Lmm).toLocaleString()+' mm' : '—'}</td>
+      <td class="text-mono text-sm">${d.Wmm != null ? parseFloat(d.Wmm).toLocaleString()+' mm' : '—'}</td>
+      <td>${isArea||isLinear ? `<input type="number" id="rl-${d.id}" placeholder="mm" step="1" min="0" onchange="calcQtyToday(${d.id})">` : '—'}</td>
+      <td>${isArea ? `<input type="number" id="rw-${d.id}" placeholder="mm" step="1" min="0" onchange="calcQtyToday(${d.id})">` : '—'}</td>
+      <td><input type="number" id="rq-${d.id}" placeholder="qty" step="0.001" min="0" ${d.metric==='per bolt'?'':'readonly'}></td>
+      <td><select id="rs-${d.id}" onchange="updateLogRowStyle(${d.id})">${statusOptions(d.status)}</select></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+function calcQtyToday(id) {
+  const d = defects.find(x => x.id === id); if (!d) return;
+  const lEl = document.getElementById('rl-'+id), wEl = document.getElementById('rw-'+id), qEl = document.getElementById('rq-'+id);
+  if (!lEl || !qEl) return;
+  const L = (parseFloat(lEl.value) || 0) / 1000; // mm → m
+  if (d.metric === 'm2') { const W = wEl ? (parseFloat(wEl.value)||0) / 1000 : 0; qEl.value = (L*W).toFixed(4); }
+  else if (d.metric === 'l/m') { qEl.value = L.toFixed(4); }
+}
+
+function updateLogRowStyle(id) {
+  const row = document.getElementById('logrow-'+id); if (!row) return;
+  row.className = logRowClass(document.getElementById('rs-'+id).value);
+}
+
+function calcEquiv() {
+  const workers = parseInt(document.getElementById('log-workers').value) || 0;
+  const totalHrs = parseFloat(document.getElementById('log-total-hrs').value) || 0;
+  const shift = setup.shift || 8;
+  const equiv = totalHrs / shift;
+  const diff = equiv - workers;
+  document.getElementById('log-equiv').style.display = 'block';
+  document.getElementById('eq-headcount').textContent = workers;
+  document.getElementById('eq-days').textContent = equiv.toFixed(3);
+  const diffEl = document.getElementById('eq-diff');
+  if (Math.abs(diff) < 0.01) { diffEl.className='diff diff-ok'; diffEl.textContent='Matches headcount exactly'; }
+  else if (diff < 0) { diffEl.className='diff diff-under'; diffEl.textContent=Math.abs(diff).toFixed(2)+' days below headcount'; }
+  else { diffEl.className='diff diff-over'; diffEl.textContent=diff.toFixed(2)+' days above headcount'; }
+}
+
+function saveLog() {
+  const date = document.getElementById('log-date').value;
+  const workers = parseInt(document.getElementById('log-workers').value) || 0;
+  const totalHrs = parseFloat(document.getElementById('log-total-hrs').value) || 0;
+  if (!date || !workers || !totalHrs) { alert('Please fill in date, labourers, and total hours.'); return; }
+  const shift = setup.shift || 8;
+  const equivDays = totalHrs / shift;
+  const entries = [];
+  defects.forEach(d => {
+    const qEl = document.getElementById('rq-'+d.id), sEl = document.getElementById('rs-'+d.id);
+    if (!qEl || !sEl) return;
+    const qty = parseFloat(qEl.value) || 0;
+    const newStatus = sEl.value;
+    if (qty > 0) { d.actualQty = Math.min(d.plannedQty, d.actualQty + qty); entries.push({num:d.num, qty, metric:d.metric}); }
+    if (newStatus === 'completed') d.actualQty = d.plannedQty;
+    d.status = newStatus;
+  });
+  // Status snapshot at end of this day (cumulative totals)
+  const statusCounts = {
+    completed: defects.filter(d => d.status === 'completed').length,
+    filledin:  defects.filter(d => d.status === 'filledin').length,
+    precut:    defects.filter(d => d.status === 'precut').length,
+  };
+  // Upsert the log (re-saving same date replaces it)
+  const existingIdx = logs.findIndex(l => l.date === date);
+  const logEntry = {date, workers, totalHrs, equivDays, entries, statusCounts};
+  if (existingIdx >= 0) logs[existingIdx] = logEntry; else logs.push(logEntry);
+  persistJobData();
+  renderDailyLogTable();
+  renderDefectTable();
+  const msg = document.getElementById('log-save-msg');
+  msg.style.display = 'inline'; msg.textContent = '✓ Log saved for ' + date;
+  setTimeout(() => msg.style.display = 'none', 3000);
+  renderLogHistory();
+}
+
+function renderLogHistory() {
+  const wrap = document.getElementById('log-history');
+  if (!logs.length) { wrap.innerHTML = ''; return; }
+  const rows = logs.slice().reverse().map(l => {
+    const diff = (l.equivDays - l.workers).toFixed(2);
+    const diffColor = Math.abs(parseFloat(diff)) < 0.01 ? 'var(--text-3)' : parseFloat(diff) < 0 ? 'var(--red)' : 'var(--green)';
+    const diffLabel = Math.abs(parseFloat(diff)) < 0.01 ? '—' : parseFloat(diff) < 0 ? diff+' vs headcount' : '+'+diff+' vs headcount';
+    return `<tr><td>${l.date}</td><td>${l.workers}</td><td>${l.totalHrs.toFixed(1)}</td>
+      <td class="text-mono">${l.equivDays.toFixed(3)}</td>
+      <td style="color:${diffColor};font-weight:600">${diffLabel}</td>
+      <td class="text-sm text-muted">${l.entries && l.entries.length ? l.entries.map(e => `#${e.num}: ${e.qty} ${e.metric}`).join(', ') : '—'}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="card" style="margin-top:8px">
+    <div class="hist-toggle" onclick="toggleHistory()">⊟ Log history (${logs.length} days) <span id="hist-chev">▾</span></div>
+    <div id="hist-body"><div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Headcount</th><th>Total hrs</th><th>Equiv. days</th><th>Variance</th><th>Repairs logged</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+function toggleHistory() {
+  const b = document.getElementById('hist-body'), c = document.getElementById('hist-chev');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+  c.textContent   = b.style.display === 'none' ? '▸' : '▾';
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function getForecastDays() {
+  if (!setup.labour || !setup.shift) return null;
+  const hpd = setup.labour * setup.shift;
+  const st = setupTime;
+  const byType = {}; let remainingRepairs = 0;
+  defects.forEach(d => {
+    const r = getRate(d.code); if (!r || !r.forecast) return;
+    const rem = Math.max(0, d.plannedQty - d.actualQty);
+    if (!rem || d.status === 'completed') return;
+    remainingRepairs++;
+    const rate = d.loc === 'internal' ? r.intRate : r.extRate; if (!rate) return;
+    if (!byType[d.code]) byType[d.code] = {hrsNeeded: 0};
+    byType[d.code].hrsNeeded += rem / rate;
+  });
+  let productivityHrs = 0;
+  Object.values(byType).forEach(t => productivityHrs += t.hrsNeeded);
+  const setupHrs = remainingRepairs * st;
+  const totalHrs = productivityHrs + setupHrs;
+  return {days: totalHrs/hpd, productivityHrs, setupHrs, totalHrs};
+}
+
+function renderDashboard() {
+  const wrap = document.getElementById('dash-content');
+  if (!defects.length) { wrap.innerHTML = '<div class="empty-state"><span class="icon">◫</span>Add defects first.</div>'; return; }
+  const total = defects.length;
+  const completed = defects.filter(d => d.status === 'completed').length;
+  const filledin  = defects.filter(d => d.status === 'filledin').length;
+  const precut    = defects.filter(d => d.status === 'precut').length;
+  const pending   = defects.filter(d => d.status === 'pending').length;
+  const pct = Math.round(completed / total * 100);
+  const totalLabourDays = logs.reduce((s,l) => s + l.equivDays, 0);
+  const budgetDays = setup.budgetDays || 0;
+  const labourPct = budgetDays > 0 ? Math.round(totalLabourDays / budgetDays * 100) : 0;
+  const budgetedRounded = budgetDays > 0 ? Math.ceil(budgetDays) : '—';
+  const fc = getForecastDays();
+
+  const typeMap = {};
+  defects.forEach(d => {
+    if (!typeMap[d.code]) typeMap[d.code] = {code:d.code, name:d.name, total:0, completed:0, precut:0, filledin:0, pending:0};
+    typeMap[d.code].total++;
+    typeMap[d.code][d.status] = (typeMap[d.code][d.status]||0) + 1;
+  });
+  function cnt(val, cls) { return val > 0 ? `<span class="cnt ${cls}">${val}</span>` : `<span class="cnt cnt-zero">—</span>`; }
+  const statusRows = Object.values(typeMap).map(t => `<tr>
+    <td><strong>${t.code}</strong> — ${t.name}</td>
+    <td style="text-align:center" class="text-mono">${t.total}</td>
+    <td style="text-align:center">${cnt(t.completed,'cnt-completed')}</td>
+    <td style="text-align:center">${cnt(t.precut,'cnt-precut')}</td>
+    <td style="text-align:center">${cnt(t.filledin,'cnt-filledin')}</td>
+    <td style="text-align:center">${cnt(t.pending,'cnt-pending')}</td>
+  </tr>`).join('');
+  const n = logs.length;
+  const totalWorkers = logs.reduce((s,l) => s+l.workers, 0);
+  const totalEquiv   = logs.reduce((s,l) => s+l.equivDays, 0);
+  const avgWorkers   = n > 0 ? (totalWorkers/n).toFixed(2) : '—';
+  const avgEquiv     = n > 0 ? (totalEquiv/n).toFixed(3) : '—';
+  const avgEquivNum  = n > 0 ? totalEquiv/n : 0;
+
+  // New Budgeted Days: recalculate project duration using avg equiv days instead of planned labour
+  const newBudgetedDays = (avgEquivNum > 0 && budgetDays > 0 && setup.labour > 0)
+    ? Math.ceil(budgetDays * setup.labour / avgEquivNum)
+    : null;
+
+  // Expected completion %: (total / newBudgetedDays) × daysOnSite / total × 100 = daysOnSite / newBudgetedDays × 100
+  const expectedPct = (newBudgetedDays !== null && newBudgetedDays > 0 && n > 0)
+    ? Math.min(Math.round((n / newBudgetedDays) * 100), 100)
+    : null;
+
+  // Daily increments for status columns — sort by date, diff consecutive snapshots
+  const logsByDate = [...logs].sort((a,b) => a.date.localeCompare(b.date));
+  const dailyDelta = {};
+  logsByDate.forEach((l, i) => {
+    if (!l.statusCounts) { dailyDelta[l.date] = null; return; }
+    const prev = i > 0 && logsByDate[i-1].statusCounts ? logsByDate[i-1].statusCounts : {completed:0,filledin:0,precut:0};
+    dailyDelta[l.date] = {
+      completed: Math.max(0, (l.statusCounts.completed||0) - (prev.completed||0)),
+      filledin:  Math.max(0, (l.statusCounts.filledin||0)  - (prev.filledin||0)),
+      precut:    Math.max(0, (l.statusCounts.precut||0)    - (prev.precut||0)),
+    };
+  });
+
+  const workedRows = n ? logs.slice().reverse().map(l => {
+    const d = dailyDelta[l.date];
+    const noData = '<span class="text-xs" style="color:var(--text-3)">—</span>';
+    return `<tr>
+    <td>${l.date}</td>
+    <td style="text-align:center" class="text-mono">${l.workers}</td>
+    <td style="text-align:center" class="text-mono">${l.equivDays.toFixed(3)}</td>
+    <td style="text-align:center">${d ? cnt(d.completed,'cnt-completed') : noData}</td>
+    <td style="text-align:center">${d ? cnt(d.filledin, 'cnt-filledin')  : noData}</td>
+    <td style="text-align:center">${d ? cnt(d.precut,   'cnt-precut')    : noData}</td>
+  </tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3)">No days logged yet.</td></tr>`;
+
+  const progClass = pct >= 80 ? 'prog-green' : pct >= 50 ? 'prog-amber' : 'prog-red';
+
+  wrap.innerHTML = `
+  <div class="metrics">
+    <div class="metric-box"><div class="label">Completed</div><div class="value">${completed}/${total}</div><div class="sub">${precut} pre-cut · ${filledin} filled in · ${pending} pending</div></div>
+    <div class="metric-box"><div class="label">Completion</div><div class="value">${pct}%</div><div class="prog-wrap"><div class="prog-fill ${progClass}" style="width:${pct}%"></div></div></div>
+    <div class="metric-box"><div class="label">Avg Labour Days</div><div class="value">${n > 0 ? (totalLabourDays/n).toFixed(2) : '—'}</div><div class="sub">Total: ${totalLabourDays.toFixed(2)} over ${n} day${n===1?'':'s'}</div></div>
+    <div class="metric-box"><div class="label">Days on Site</div><div class="value">${n}</div><div class="sub">${n > 0 ? 'Since '+[...logs].sort((a,b)=>a.date.localeCompare(b.date))[0].date : 'No days logged yet'}</div></div>
+    <div class="metric-box"><div class="label">New Budgeted Days</div><div class="value">${newBudgetedDays !== null ? newBudgetedDays : '—'}</div><div class="sub">${newBudgetedDays !== null ? 'Using avg '+avgEquivNum.toFixed(2)+' equiv days/day' : 'Log days to calculate'}</div></div>
+    <div class="metric-box"><div class="label">Expected Completion</div><div class="value">${expectedPct !== null ? expectedPct+'%' : '—'}</div><div class="sub">${expectedPct !== null ? n+' of '+newBudgetedDays+' days on site' : 'Log days to calculate'}</div></div>
+    <div class="metric-box accent"><div class="label">Budgeted days</div><div class="value">${budgetedRounded}</div><div class="sub">${budgetDays > 0 ? budgetDays.toFixed(2)+' days · '+setup.labour+' labour'+(setup.labour===1?'':'s') : 'Import defect list'}</div></div>
+  </div>
+  ${labourPct > 100 ? '<div class="alert alert-warning">⚠ Labour budget exceeded — '+labourPct+'% used.</div>' : ''}
+  <div class="card"><div class="card-title">Current status</div><div class="table-wrap"><table>
+    <thead><tr><th>Repair type</th><th style="text-align:center">Total</th>
+      <th style="text-align:center"><span class="dot dot-completed" style="display:inline-block"></span>Completed</th>
+      <th style="text-align:center"><span class="dot dot-precut" style="display:inline-block"></span>Pre-cut</th>
+      <th style="text-align:center"><span class="dot dot-filledin" style="display:inline-block"></span>Filled in</th>
+      <th style="text-align:center"><span class="dot dot-pending" style="display:inline-block"></span>Pending</th>
+    </tr></thead>
+    <tbody>${statusRows}</tbody>
+    <tfoot><tr><td>Total</td><td style="text-align:center" class="text-mono">${total}</td>
+      <td style="text-align:center">${cnt(completed,'cnt-completed')}</td>
+      <td style="text-align:center">${cnt(precut,'cnt-precut')}</td>
+      <td style="text-align:center">${cnt(filledin,'cnt-filledin')}</td>
+      <td style="text-align:center">${cnt(pending,'cnt-pending')}</td>
+    </tr></tfoot>
+  </table></div></div>
+  <div class="card"><div class="card-title">Worked days</div><div class="table-wrap"><table>
+    <thead><tr>
+      <th>Date</th>
+      <th style="text-align:center">Labourers on site</th>
+      <th style="text-align:center">Equiv. labour days</th>
+      <th style="text-align:center"><span class="dot dot-completed" style="display:inline-block"></span>Completed</th>
+      <th style="text-align:center"><span class="dot dot-filledin" style="display:inline-block"></span>Filled in</th>
+      <th style="text-align:center"><span class="dot dot-precut" style="display:inline-block"></span>Pre-cut</th>
+    </tr></thead>
+    <tbody>${workedRows}</tbody>
+    ${n ? `<tfoot><tr>
+      <td>Daily average (${n} days)</td>
+      <td style="text-align:center" class="text-mono">${avgWorkers}</td>
+      <td style="text-align:center" class="text-mono">${avgEquiv}</td>
+      <td colspan="3" style="text-align:center;font-size:11px;color:var(--text-3)">cumulative snapshot per day</td>
+    </tr></tfoot>` : ''}
+  </table></div></div>`;
+}
+
+// ============================================================
+// PRODUCTIVITY / RATES
+// ============================================================
+function updateSetupMins() {
+  document.getElementById('setup-time-mins').textContent = '≈ ' + ((parseFloat(document.getElementById('setup-time-input').value)||0)*60).toFixed(1) + ' min';
+}
+
+function renderRates() {
+  document.getElementById('setup-time-input').value = setupTime;
+  document.getElementById('setup-time-mins').textContent = '≈ ' + (setupTime*60).toFixed(1) + ' min';
+  document.getElementById('rates-body').innerHTML = rates.map((r,i) => `<tr>
+    <td><strong class="text-mono">${r.code}</strong></td><td>${r.name}</td><td class="text-mono">${r.metric}</td>
+    <td>${r.forecast ? `<input type="number" id="ri-${i}" value="${r.intRate}" step="0.01" style="width:78px;font-family:var(--mono)">` : '—'}</td>
+    <td>${r.forecast ? `<input type="number" id="re-${i}" value="${r.extRate}" step="0.01" style="width:78px;font-family:var(--mono)">` : '—'}</td>
+    <td>${r.forecast ? '<span class="badge b-yes">Yes</span>' : '<span class="badge b-no">Excl.</span>'}</td>
+  </tr>`).join('');
+}
+
+function saveRates() {
+  setupTime = parseFloat(document.getElementById('setup-time-input').value) || 0.2533;
+  rates.forEach((r,i) => {
+    if (!r.forecast) return;
+    const iv = document.getElementById('ri-'+i), ev = document.getElementById('re-'+i);
+    if (iv) r.intRate = parseFloat(iv.value) || 0;
+    if (ev) r.extRate = parseFloat(ev.value) || 0;
+  });
+  persistJobData();
+  const a = document.createElement('div');
+  a.className = 'alert alert-success'; a.style.marginBottom = '10px'; a.innerHTML = '✓ Rates saved.';
+  document.querySelector('#page-productivity .alert-info').insertAdjacentElement('afterend', a);
+  setTimeout(() => a.remove(), 3000);
+}
+
+// ============================================================
+// PDF EXPORT
+// ============================================================
+function fmtDate(d) { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
+
+function exportDailyPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const ACCENT = [27,79,138], GREEN=[45,106,31], AMBER=[160,92,16], RED=[139,32,32], GREY=[107,104,96], LT=[240,239,232];
+  const date = document.getElementById('log-date').value;
+  const workers = parseInt(document.getElementById('log-workers').value) || 0;
+  const totalHrs = parseFloat(document.getElementById('log-total-hrs').value) || 0;
+  const shift = setup.shift || 8;
+  const equivDays = totalHrs / shift;
+  const diff = equivDays - workers;
+
+  // Header
+  doc.setFillColor(...ACCENT); doc.rect(0,0,210,28,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255,255,255);
+  doc.text('Civil Maintenance Job Tracker', 14, 11);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Daily Log Report', 14, 18);
+  doc.text('Generated: ' + new Date().toLocaleString(), 14, 24);
+
+  let y = 36;
+  // Job info
+  doc.setFontSize(9); doc.setTextColor(...GREY); doc.setFont('helvetica','bold');
+  ['JOB','CLIENT','LOCATION','DATE'].forEach((lbl,i) => doc.text(lbl, 14+i*56, y));
+  y += 4; doc.setFont('helvetica','normal'); doc.setTextColor(30,25,22); doc.setFontSize(10);
+  [setup.name||'—', setup.client||'—', setup.location||'—', fmtDate(date)].forEach((v,i) => doc.text(v, 14+i*56, y, {maxWidth:52}));
+  y += 10; doc.setDrawColor(220,218,210); doc.line(14,y,196,y); y += 6;
+
+  // Labour cards
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...GREY);
+  doc.text('LABOURERS ON SITE', 14, y); doc.text('TOTAL HOURS', 76, y); doc.text('EQUIVALENT DAYS', 138, y);
+  y += 5; doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(30,25,22);
+  doc.text(String(workers||'—'), 14, y); doc.text(totalHrs ? totalHrs.toFixed(1) : '—', 76, y);
+  const diffColor = Math.abs(diff) < 0.01 ? GREY : diff < 0 ? RED : GREEN;
+  doc.setTextColor(...diffColor); doc.text(equivDays.toFixed(3), 138, y);
+  y += 5; doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  if (Math.abs(diff) < 0.01) { doc.setTextColor(...GREY); doc.text('Matches headcount', 138, y); }
+  else if (diff < 0) { doc.setTextColor(...RED); doc.text(Math.abs(diff).toFixed(2)+' days below headcount', 138, y); }
+  else { doc.setTextColor(...GREEN); doc.text(diff.toFixed(2)+' days above headcount', 138, y); }
+  y += 10; doc.setTextColor(30,25,22); doc.setDrawColor(220,218,210); doc.line(14,y,196,y); y += 6;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...GREY);
+  doc.text('REPAIRS', 14, y); y += 3;
+
+  const SL = {pending:'Pending',precut:'Pre-cut',filledin:'Filled in',completed:'Completed'};
+  const SC = {pending:GREY, precut:ACCENT, filledin:AMBER, completed:GREEN};
+  const tableRows = defects.map(d => {
+    const qEl = document.getElementById('rq-'+d.id), sEl = document.getElementById('rs-'+d.id);
+    const qty = qEl ? (parseFloat(qEl.value)||0) : 0;
+    const st = sEl ? sEl.value : d.status;
+    return [d.num, d.code+' — '+d.name, d.loc.charAt(0).toUpperCase()+d.loc.slice(1), d.metric,
+            qty > 0 ? qty.toFixed(3) : '—', d.actualQty > 0 ? d.actualQty.toFixed(3) : '—', SL[st]||st];
+  });
+  doc.autoTable({
+    startY:y, head:[['Defect No.','Type','Location','Metric','Qty Today','Cumulative','Status']],
+    body:tableRows, theme:'grid',
+    headStyles:{fillColor:LT, textColor:GREY, fontStyle:'bold', fontSize:8, halign:'left'},
+    bodyStyles:{fontSize:8, textColor:[30,25,22]},
+    columnStyles:{0:{cellWidth:20},1:{cellWidth:54},2:{cellWidth:20},3:{cellWidth:22},4:{cellWidth:22,halign:'right'},5:{cellWidth:24,halign:'right'},6:{cellWidth:24}},
+    didParseCell(data) {
+      if (data.section==='body' && data.column.index===6) {
+        const k = Object.keys(SL).find(k => SL[k]===data.cell.raw);
+        if (k) { data.cell.styles.textColor = SC[k]; data.cell.styles.fontStyle = 'bold'; }
+      }
+    },
+    margin:{left:14,right:14},
+  });
+  const pc = doc.internal.getNumberOfPages();
+  for (let i=1;i<=pc;i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text((setup.name||'Civil Maintenance Tracker')+' — Daily Log '+fmtDate(date), 14, 290); doc.text('Page '+i+' of '+pc, 196, 290, {align:'right'}); }
+  doc.save('daily-log-'+(date||'report')+'.pdf');
+}
+
+function exportSummaryPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const ACCENT=[27,79,138], GREEN=[45,106,31], AMBER=[160,92,16], RED=[139,32,32], GREY=[107,104,96], LT=[240,239,232];
+  const total=defects.length, completed=defects.filter(d=>d.status==='completed').length;
+  const filledin=defects.filter(d=>d.status==='filledin').length, precut=defects.filter(d=>d.status==='precut').length;
+  const pending=defects.filter(d=>d.status==='pending').length;
+  const pct = total > 0 ? Math.round(completed/total*100) : 0;
+  const budgetDays=setup.budgetDays||0, totalLabourDays=logs.reduce((s,l)=>s+l.equivDays,0);
+  const labourPct=budgetDays>0?Math.round(totalLabourDays/budgetDays*100):0;
+
+  doc.setFillColor(...ACCENT); doc.rect(0,0,210,28,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255,255,255);
+  doc.text('Civil Maintenance Job Tracker', 14, 11);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('End-of-Job Summary', 14, 18);
+  doc.text('Generated: '+new Date().toLocaleString(), 14, 24);
+
+  let y=36;
+  doc.setFontSize(9); doc.setTextColor(...GREY); doc.setFont('helvetica','bold');
+  ['JOB','CLIENT','LOCATION','START'].forEach((l,i)=>doc.text(l, 14+i*56, y));
+  y+=4; doc.setFont('helvetica','normal'); doc.setTextColor(30,25,22); doc.setFontSize(10);
+  [setup.name||'—',setup.client||'—',setup.location||'—',fmtDate(setup.start)].forEach((v,i)=>doc.text(v,14+i*56,y,{maxWidth:52}));
+  y+=10; doc.setDrawColor(220,218,210); doc.line(14,y,196,y); y+=6;
+
+  // Metric boxes
+  const mets=[
+    {label:'COMPLETED',value:`${completed}/${total}`,sub:`${pct}%`,color:pct>=80?GREEN:pct>=50?AMBER:RED},
+    {label:'COMPLETION',value:`${pct}%`,sub:'',color:pct>=80?GREEN:pct>=50?AMBER:RED},
+    {label:'AVG LABOUR DAYS',value:logs.length>0?(totalLabourDays/logs.length).toFixed(2):'—',sub:`Total: ${totalLabourDays.toFixed(2)} over ${logs.length} days`,color:labourPct>100?RED:GREY},
+    {label:'BUDGET DAYS',value:budgetDays>0?String(Math.ceil(budgetDays)):'—',sub:budgetDays>0?budgetDays.toFixed(2)+' · '+(setup.labour||0)+' labour'+(setup.labour===1?'':'s'):'',color:ACCENT},
+    {label:'DAYS LOGGED',value:String(logs.length),sub:`${setup.shift||8}hr shifts`,color:GREY},
+  ];
+  mets.forEach((m,i)=>{
+    const x=14+i*38;
+    doc.setFillColor(...LT); doc.roundedRect(x,y,36,22,2,2,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...GREY); doc.text(m.label,x+2,y+5,{maxWidth:32});
+    doc.setFontSize(13); doc.setTextColor(...m.color); doc.text(m.value,x+2,y+14);
+    if (m.sub) { doc.setFontSize(7); doc.setTextColor(...GREY); doc.text(m.sub,x+2,y+20); }
+  });
+  y+=28;
+  doc.setFillColor(232,230,223); doc.roundedRect(14,y,182,5,2,2,'F');
+  doc.setFillColor(...(pct>=80?GREEN:pct>=50?AMBER:RED)); doc.roundedRect(14,y,Math.max(2,182*pct/100),5,2,2,'F');
+  y+=10; doc.setDrawColor(220,218,210); doc.line(14,y,196,y); y+=6;
+
+  // Status table
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...GREY);
+  doc.text('CURRENT STATUS BY REPAIR TYPE', 14, y); y+=3;
+  const typeMap={};
+  defects.forEach(d=>{
+    if(!typeMap[d.code]) typeMap[d.code]={code:d.code,name:d.name,total:0,completed:0,precut:0,filledin:0,pending:0};
+    typeMap[d.code].total++; typeMap[d.code][d.status]=(typeMap[d.code][d.status]||0)+1;
+  });
+  const sRows=Object.values(typeMap).map(t=>[`${t.code} — ${t.name}`,t.total,t.completed||0,t.precut||0,t.filledin||0,t.pending||0]);
+  sRows.push(['Total',total,completed,precut,filledin,pending]);
+  doc.autoTable({
+    startY:y, head:[['Repair type','Total','Completed','Pre-cut','Filled in','Pending']],
+    body:sRows, theme:'grid',
+    headStyles:{fillColor:LT,textColor:GREY,fontStyle:'bold',fontSize:8},
+    bodyStyles:{fontSize:8,textColor:[30,25,22]},
+    columnStyles:{0:{cellWidth:80},1:{cellWidth:20,halign:'center'},2:{cellWidth:22,halign:'center',textColor:GREEN,fontStyle:'bold'},3:{cellWidth:22,halign:'center',textColor:ACCENT,fontStyle:'bold'},4:{cellWidth:22,halign:'center',textColor:AMBER,fontStyle:'bold'},5:{cellWidth:20,halign:'center'}},
+    didParseCell(data){if(data.section==='body'&&data.row.index===sRows.length-1){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=LT;}},
+    margin:{left:14,right:14},
+  });
+
+  if (logs.length > 0) {
+    y = doc.lastAutoTable.finalY+8;
+    if (y>230){doc.addPage();y=16;}
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...GREY);
+    doc.text('WORKED DAYS', 14, y); y+=3;
+    const n=logs.length, tw=logs.reduce((s,l)=>s+(l.workers||0),0), te=logs.reduce((s,l)=>s+l.equivDays,0);
+    const lRows=logs.slice().reverse().map(l=>[fmtDate(l.date),l.workers,l.equivDays.toFixed(3)]);
+    lRows.push([`Daily average (${n} days)`, (tw/n).toFixed(2), (te/n).toFixed(3)]);
+    doc.autoTable({
+      startY:y, head:[['Date','Labourers on site','Equivalent labour days']],
+      body:lRows, theme:'grid',
+      headStyles:{fillColor:LT,textColor:GREY,fontStyle:'bold',fontSize:8},
+      bodyStyles:{fontSize:8,textColor:[30,25,22]},
+      columnStyles:{0:{cellWidth:40},1:{cellWidth:50,halign:'center'},2:{cellWidth:50,halign:'center'}},
+      didParseCell(data){if(data.section==='body'&&data.row.index===lRows.length-1){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=LT;}},
+      margin:{left:14,right:14},
+    });
+  }
+
+  const pc=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pc;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(...GREY);doc.text((setup.name||'Civil Maintenance Tracker')+' — Summary',14,290);doc.text('Page '+i+' of '+pc,196,290,{align:'right'});}
+  doc.save('summary-'+(setup.name||'job').replace(/\s+/g,'-').toLowerCase()+'.pdf');
+}
+
+// ============================================================
+// AUTH — users in localStorage, session in sessionStorage
+// ============================================================
+const LS_USERS  = 'cmt_users_v2';
+const LS_NOTIFS = 'cmt_notifs_v2';
+const SS_SESSION= 'cmt_session_v2';
+
+function hashPwd(str) {
+  // Simple deterministic encoding — replace with bcrypt on Synology
+  try { return btoa(unescape(encodeURIComponent(str + ':cmt'))); } catch { return str; }
+}
+
+// In-memory fallbacks for when localStorage/sessionStorage are blocked (e.g. file:// in Chrome)
+let _memUsers = null, _memNotifs = null, _memSession = null;
+
+function getUsers() {
+  if (_memUsers !== null) return _memUsers;
+  try { return JSON.parse(localStorage.getItem(LS_USERS) || '[]'); } catch { return []; }
+}
+function saveUsers(arr) {
+  _memUsers = arr;
+  try { localStorage.setItem(LS_USERS, JSON.stringify(arr)); } catch {}
+}
+function getNotifs() {
+  if (_memNotifs !== null) return _memNotifs;
+  try { return JSON.parse(localStorage.getItem(LS_NOTIFS) || '[]'); } catch { return []; }
+}
+function saveNotifs(arr) {
+  _memNotifs = arr;
+  try { localStorage.setItem(LS_NOTIFS, JSON.stringify(arr)); } catch {}
+}
+function getSession() {
+  if (_memSession !== null) return _memSession;
+  try { return JSON.parse(sessionStorage.getItem(SS_SESSION) || 'null'); } catch { return null; }
+}
+function setSession(obj) {
+  _memSession = obj;
+  try { sessionStorage.setItem(SS_SESSION, JSON.stringify(obj)); } catch {}
+}
+function clearSession() {
+  _memSession = null;
+  try { sessionStorage.removeItem(SS_SESSION); } catch {}
+}
+
+function ensureDefaultSupervisor() {
+  const users = getUsers();
+  if (!users.length) {
+    users.push({ id:'u_admin', username:'admin', displayName:'Administrator', password:hashPwd('admin123'), role:'supervisor', isActive:true, assignedJobs:[], createdAt:today() });
+    saveUsers(users);
+    return true;
+  }
+  return false;
+}
+
+function doLogin() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const err = document.getElementById('auth-error');
+  err.classList.remove('show');
+  if (!username || !password) { err.textContent = 'Please enter username and password.'; err.classList.add('show'); return; }
+  const users = getUsers();
+  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.isActive);
+  if (!users.length) { err.textContent = 'No accounts found — please reload the page and try again.'; err.classList.add('show'); return; }
+  if (!user) { err.textContent = 'Username not found.'; err.classList.add('show'); return; }
+  if (hashPwd(password) !== user.password) { err.textContent = 'Wrong password.'; err.classList.add('show'); return; }
+  if (user.role === 'worker') {
+    setSession({ userId:user.id, username:user.username, displayName:user.displayName||user.username, role:'worker', viewMode:'worker' });
+    document.getElementById('auth-overlay').classList.add('hidden');
+    launchFieldView();
+  } else {
+    setSession({ userId:user.id, username:user.username, displayName:user.displayName||user.username, role:'supervisor', viewMode:null });
+    document.getElementById('role-welcome-name').textContent = user.displayName || user.username;
+    document.getElementById('auth-overlay').classList.add('hidden');
+    document.getElementById('role-selector').classList.remove('hidden');
+  }
+}
+
+function chooseRole(mode) {
+  document.getElementById('auth-overlay').classList.add('hidden');
+  if (mode === 'worker') launchFieldView(); else launchSupervisorApp();
+}
+
+function logout() {
+  clearSession();
+  document.getElementById('field-view').classList.remove('active');
+  document.querySelector('.shell').style.display = 'none';
+  document.getElementById('auth-overlay').classList.remove('hidden');
+}
+
+function launchSupervisorApp() {
+  document.querySelector('.shell').style.display = 'flex';
+  document.getElementById('field-view').classList.remove('active');
+  document.getElementById('sidebar-username').textContent = 'Supervisor';
+  renderNotifBadge();
+}
+
+function launchFieldView() {
+  document.querySelector('.shell').style.display = 'none';
+  document.getElementById('field-view').classList.add('active');
+  document.getElementById('fv-welcome-name').textContent = 'Welcome';
+  fvBuildJobList();
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function addNotif(jobId, jobName, workerName, date) {
+  const notifs = getNotifs();
+  const ei = notifs.findIndex(n => n.jobId === jobId && n.date === date && n.username === workerName);
+  const notif = { id:'n_'+Date.now(), jobId, jobName, username:workerName, date, createdAt:new Date().toISOString(), read:false };
+  if (ei >= 0) notifs[ei] = notif; else notifs.unshift(notif);
+  saveNotifs(notifs); renderNotifBadge();
+}
+
+function renderNotifBadge() {
+  const unread = getNotifs().filter(n => !n.read).length;
+  const badge = document.getElementById('notif-badge');
+  if (badge) { badge.style.display = unread > 0 ? 'inline-flex' : 'none'; badge.textContent = unread > 9 ? '9+' : unread; }
+}
+
+function markNotifsRead() {
+  const notifs = getNotifs(); notifs.forEach(n => n.read = true); saveNotifs(notifs); renderNotifBadge();
+}
+
+// ============================================================
+// TEAM MANAGEMENT
+// ============================================================
+let _editingUserId = null;
+
+function renderTeamPage() {
+  const workers = getUsers().filter(u => u.role === 'worker');
+  const list = document.getElementById('team-list');
+  if (!list) return;
+  if (!workers.length) { list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-2);font-size:13px">No workers yet. Add your first worker above.</div>'; return; }
+  list.innerHTML = workers.map(u => `
+    <div class="team-user-row">
+      <div class="team-avatar">${(u.displayName||u.username).charAt(0).toUpperCase()}</div>
+      <div class="team-user-info">
+        <div class="team-user-name">${u.displayName||u.username}</div>
+        <div class="team-user-meta">@${u.username} &nbsp;·&nbsp; ${(u.assignedJobs||[]).length} job${(u.assignedJobs||[]).length===1?'':'s'} assigned</div>
+      </div>
+      <span class="team-status-pill ${u.isActive?'active':'inactive'}">${u.isActive?'Active':'Inactive'}</span>
+      <button class="btn btn-sm" style="margin-left:8px" onclick="openEditWorker('${u.id}')">Edit</button>
+    </div>`).join('');
+}
+
+function openAddUser() {
+  document.getElementById('add-user-form').style.display = 'block';
+  document.getElementById('new-username').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('new-displayname').value = '';
+  document.getElementById('add-user-err').style.display = 'none';
+  renderJobCheckboxes('new-job-assign', []);
+}
+function closeAddUser() { document.getElementById('add-user-form').style.display = 'none'; }
+
+function renderJobCheckboxes(containerId, selected) {
+  const jobs = allJobs(); const c = document.getElementById(containerId); if (!c) return;
+  if (!jobs.length) { c.innerHTML = '<span style="color:var(--text-3);font-size:12px">No jobs created yet</span>'; return; }
+  c.innerHTML = jobs.map(j => `<label><input type="checkbox" value="${j.id}" ${selected.includes(j.id)?'checked':''}> ${j.name||'Untitled job'}</label>`).join('');
+}
+
+function getCheckedJobs(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map(c => c.value);
+}
+
+function saveNewUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const displayName = document.getElementById('new-displayname').value.trim();
+  const err = document.getElementById('add-user-err');
+  if (!username || !password) { err.textContent = 'Username and password are required.'; err.style.display='block'; return; }
+  const users = getUsers();
+  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) { err.textContent = 'Username already exists.'; err.style.display='block'; return; }
+  users.push({ id:'u_'+Date.now(), username, displayName:displayName||username, password:hashPwd(password), role:'worker', isActive:true, assignedJobs:getCheckedJobs('new-job-assign'), createdAt:today() });
+  saveUsers(users); closeAddUser(); renderTeamPage();
+}
+
+function openEditWorker(id) {
+  const user = getUsers().find(u => u.id === id); if (!user) return;
+  _editingUserId = id;
+  document.getElementById('edit-worker-name').textContent = user.displayName || user.username;
+  document.getElementById('edit-password').value = '';
+  document.getElementById('edit-displayname').value = user.displayName || '';
+  document.getElementById('btn-deactivate').textContent = user.isActive ? 'Deactivate' : 'Reactivate';
+  renderJobCheckboxes('edit-job-assign', user.assignedJobs || []);
+  document.getElementById('edit-worker-panel').style.display = 'block';
+  document.getElementById('add-user-form').style.display = 'none';
+}
+function closeEditWorker() { document.getElementById('edit-worker-panel').style.display = 'none'; _editingUserId = null; }
+
+function saveEditWorker() {
+  if (!_editingUserId) return;
+  const users = getUsers(); const idx = users.findIndex(u => u.id === _editingUserId); if (idx < 0) return;
+  const newPwd = document.getElementById('edit-password').value;
+  const newDisplay = document.getElementById('edit-displayname').value.trim();
+  if (newPwd) users[idx].password = hashPwd(newPwd);
+  if (newDisplay) users[idx].displayName = newDisplay;
+  users[idx].assignedJobs = getCheckedJobs('edit-job-assign');
+  saveUsers(users); closeEditWorker(); renderTeamPage();
+}
+
+function deactivateWorker() {
+  if (!_editingUserId) return;
+  const users = getUsers(); const idx = users.findIndex(u => u.id === _editingUserId); if (idx < 0) return;
+  users[idx].isActive = !users[idx].isActive;
+  saveUsers(users); closeEditWorker(); renderTeamPage();
+}
+
+// ============================================================
+// FIELD VIEW
+// ============================================================
+const FV_SC = { pending:'sp', precut:'sc', filledin:'sf', completed:'sd' };
+const FV_SL = { pending:'Pending', precut:'Pre-cut', filledin:'Filled in', completed:'Completed' };
+const FV_DOTS = { pending:'#9CA3AF', precut:'#FBBF24', filledin:'#60A5FA', completed:'#4ADE80' };
+let fvJobId = null, fvCurDef = null, fvFilt = 'all', fvCurStatus = 'pending';
+
+function fvBuildJobList() {
+  const allJobsList = allJobs();
+  let visibleJobs = allJobsList;
+  const list = document.getElementById('fv-job-list');
+  if (!visibleJobs.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9CA3AF;font-size:14px">No jobs assigned yet.<br>Contact your supervisor.</div>'; return;
+  }
+  list.innerHTML = visibleJobs.map(j => {
+    const data = loadJobData(j.id);
+    const defCount = data ? (data.defects||[]).length : 0;
+    const meta = data && data.setup ? [data.setup.client, data.setup.location].filter(Boolean).join(' · ') : '';
+    return `<div class="fv-job-card" onclick="fvPickJob('${j.id}')">
+      <div class="fv-job-icon">🏗</div>
+      <div style="flex:1;min-width:0"><div class="fv-job-name">${j.name||'Untitled job'}</div><div class="fv-job-meta">${meta}</div></div>
+      <div class="fv-job-count">${defCount} defects</div>
+    </div>`;
+  }).join('');
+}
+
+function fvPickJob(id) {
+  fvJobId = id; fvFilt = 'all';
+  const data = loadJobData(id);
+  const jobName = data && data.setup ? (data.setup.name||'Job') : 'Job';
+  const defCount = data ? (data.defects||[]).length : 0;
+  document.getElementById('fv-title').textContent = jobName;
+  document.getElementById('fv-sub').textContent = defCount + ' defects';
+  document.getElementById('fv-header').style.display = 'flex';
+  document.getElementById('fv-log-date').value = today();
+  const now = new Date();
+  document.getElementById('fv-log-time').value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('fv-log-workers').value = '';
+  document.getElementById('fv-log-hrs').value = '';
+  document.getElementById('fv-btn-save-log').disabled = true;
+  document.getElementById('fv-btn-save-log').classList.remove('ok');
+  document.getElementById('fv-btn-save-log').innerHTML = '💾 Save daily log';
+  document.getElementById('fv-save-ts').textContent = '';
+  document.getElementById('fv-submit-bar').classList.remove('on');
+  document.querySelectorAll('.fv-ftab').forEach((t,i) => t.classList.toggle('on', i===0));
+  fvRenderList(); fvGo('fv-s2');
+}
+
+function fvBack() {
+  if (document.getElementById('fv-s3').classList.contains('on')) {
+    document.getElementById('fv-save-bar').classList.remove('on');
+    const data = loadJobData(fvJobId);
+    document.getElementById('fv-title').textContent = data && data.setup ? (data.setup.name||'Job') : 'Job';
+    document.getElementById('fv-sub').textContent = (data ? (data.defects||[]).length : 0) + ' defects';
+    fvCheckReq(); fvRenderList(); fvGo('fv-s2');
+  } else {
+    fvGo('fv-s1'); document.getElementById('fv-header').style.display = 'none';
+    document.getElementById('fv-submit-bar').classList.remove('on'); fvJobId = null;
+  }
+}
+
+function fvGo(id) { document.querySelectorAll('.fv-screen').forEach(s => s.classList.remove('on')); document.getElementById(id).classList.add('on'); }
+
+function fvRenderChips() {
+  const data = loadJobData(fvJobId); const defs = data ? data.defects||[] : [];
+  const c = {pending:0,precut:0,filledin:0,completed:0};
+  defs.forEach(d => { if(c[d.status]!==undefined) c[d.status]++; });
+  document.getElementById('fv-chips').innerHTML =
+    `<div class="fv-chip"><span class="fv-dot" style="background:#555"></span>All ${defs.length}</div>` +
+    Object.entries(c).map(([k,v]) => `<div class="fv-chip"><span class="fv-dot" style="background:${FV_DOTS[k]}"></span>${FV_SL[k]} ${v}</div>`).join('');
+}
+
+function fvRenderList() {
+  fvRenderChips();
+  const data = loadJobData(fvJobId); const all = data ? data.defects||[] : [];
+  const defs = fvFilt === 'all' ? all : all.filter(d => d.status === fvFilt);
+  const list = document.getElementById('fv-dlist');
+  if (!defs.length) { list.innerHTML = '<div style="text-align:center;padding:48px 0;color:#9CA3AF;font-size:14px">No defects for this filter</div>'; return; }
+  list.innerHTML = defs.map(d => {
+    const dimStr = d.metric === 'm2' ? `${d.Lmm||d.l_mm||''} × ${d.Wmm||d.w_mm||''} mm` : `${d.Lmm||d.l_mm||d.plannedQty||''} ${d.metric||''}`;
+    const sc = FV_SC[d.status]||'sp';
+    return `<div class="fv-dcard ${sc}" onclick="fvOpenDef(${JSON.stringify(d.id||0)})">
+      <div class="fv-dnum">${d.num||d.id}</div>
+      <div style="flex:1;min-width:0"><div class="fv-dtype">${d.name||d.code||''}</div><div class="fv-ddim">${dimStr}</div></div>
+      <span class="fv-sbadge ${sc}">${FV_SL[d.status]||'Pending'}</span>
+      <span style="color:#9CA3AF;font-size:18px;flex-shrink:0">›</span>
+    </div>`;
+  }).join('');
+}
+
+function fvFilter(f, btn) {
+  fvFilt = f; document.querySelectorAll('.fv-ftab').forEach(t => t.classList.remove('on')); btn.classList.add('on'); fvRenderList();
+}
+
+function fvOpenDef(id) {
+  const data = loadJobData(fvJobId); if (!data) return;
+  fvCurDef = data.defects.find(d => d.id === id); if (!fvCurDef) return;
+  fvCurStatus = fvCurDef.status || 'pending';
+  document.getElementById('fv-title').textContent = 'Defect #' + (fvCurDef.num || id);
+  document.getElementById('fv-sub').textContent = fvCurDef.name || fvCurDef.code || '';
+  document.querySelectorAll('.fv-sbtn').forEach(b => b.classList.remove('on'));
+  const ab = document.querySelector(`.fv-sbtn[data-s="${fvCurStatus}"]`); if (ab) ab.classList.add('on');
+  const isArea = fvCurDef.metric === 'm2';
+  const lVal = fvCurDef.Lmm ?? (fvCurDef.l_mm ?? '');
+  const wVal = fvCurDef.Wmm ?? (fvCurDef.w_mm ?? '');
+  document.getElementById('fv-il').value = lVal;
+  document.getElementById('fv-iw').value = wVal;
+  document.getElementById('fv-iw-wrap').style.display = isArea ? '' : 'none';
+  document.getElementById('fv-fw-wrap').style.display = isArea ? '' : 'none';
+  document.getElementById('fv-farea-wrap').style.display = isArea ? '' : 'none';
+  document.getElementById('fv-fl').value = fvCurDef.finalL !== undefined ? fvCurDef.finalL : lVal;
+  document.getElementById('fv-fw').value = fvCurDef.finalW !== undefined ? fvCurDef.finalW : wVal;
+  fvCalcArea();
+  document.getElementById('fv-notes').value = fvCurDef.notes || '';
+  const hasPh = !!fvCurDef.photo;
+  document.getElementById('fv-photo-prev').style.display = hasPh ? 'block' : 'none';
+  document.getElementById('fv-photo-btn').style.display = hasPh ? 'none' : 'flex';
+  if (hasPh) document.getElementById('fv-photo-img').src = fvCurDef.photo;
+  document.getElementById('fv-submit-bar').classList.remove('on');
+  document.getElementById('fv-save-bar').classList.add('on');
+  const sb = document.getElementById('fv-btn-save'); sb.innerHTML = '💾 Save changes'; sb.classList.remove('ok');
+  fvGo('fv-s3');
+}
+
+function fvSetStatus(s) {
+  fvCurStatus = s; document.querySelectorAll('.fv-sbtn').forEach(b => b.classList.remove('on'));
+  const ab = document.querySelector(`.fv-sbtn[data-s="${s}"]`); if (ab) ab.classList.add('on');
+}
+
+function fvCalcArea() {
+  if (!fvCurDef || fvCurDef.metric !== 'm2') return;
+  const l = (parseFloat(document.getElementById('fv-fl').value)||0)/1000;
+  const w = (parseFloat(document.getElementById('fv-fw').value)||0)/1000;
+  document.getElementById('fv-farea').value = l && w ? (l*w).toFixed(4) : '';
+}
+
+function fvSaveDef() {
+  if (!fvCurDef || !fvJobId) return;
+  const data = loadJobData(fvJobId); if (!data) return;
+  const idx = data.defects.findIndex(d => d.id === fvCurDef.id); if (idx < 0) return;
+  data.defects[idx].status = fvCurStatus;
+  data.defects[idx].finalL = parseFloat(document.getElementById('fv-fl').value)||undefined;
+  data.defects[idx].finalW = parseFloat(document.getElementById('fv-fw').value)||undefined;
+  data.defects[idx].notes  = document.getElementById('fv-notes').value;
+  if (fvCurDef.photo) data.defects[idx].photo = fvCurDef.photo;
+  localStorage.setItem(LS_JOB_PFX + fvJobId, JSON.stringify(data));
+  fvCurDef = data.defects[idx];
+  if (activeJobId === fvJobId) { defects = data.defects; renderDefectTable(); renderDashboard(); }
+  const sb = document.getElementById('fv-btn-save'); sb.innerHTML = '✓ Saved'; sb.classList.add('ok');
+  fvToast('Defect #' + (fvCurDef.num||'') + ' saved');
+}
+
+function fvOnPhoto(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    document.getElementById('fv-photo-img').src = ev.target.result;
+    document.getElementById('fv-photo-prev').style.display = 'block';
+    document.getElementById('fv-photo-btn').style.display = 'none';
+    if (fvCurDef) fvCurDef.photo = ev.target.result;
+  };
+  r.readAsDataURL(f);
+}
+
+function fvRmPhoto() {
+  document.getElementById('fv-photo-prev').style.display = 'none';
+  document.getElementById('fv-photo-btn').style.display = 'flex';
+  document.getElementById('fv-photo-input').value = '';
+  if (fvCurDef) fvCurDef.photo = null;
+}
+
+function fvCheckReq() {
+  const t = document.getElementById('fv-log-time').value;
+  const w = document.getElementById('fv-log-workers').value;
+  const h = document.getElementById('fv-log-hrs').value;
+  const ready = !!(t && w && h);
+  document.getElementById('fv-btn-save-log').disabled = !ready;
+  document.getElementById('fv-submit-bar').classList.toggle('on', ready);
+}
+
+function fvSaveLog() {
+  if (!fvJobId) return;
+  const dateVal  = document.getElementById('fv-log-date').value;
+  const timeVal  = document.getElementById('fv-log-time').value;
+  const workers  = parseInt(document.getElementById('fv-log-workers').value) || 0;
+  const totalHrs = parseFloat(document.getElementById('fv-log-hrs').value) || 0;
+  if (!timeVal || !workers || !totalHrs) return;
+  const data = loadJobData(fvJobId); if (!data) return;
+  const shift = (data.setup && data.setup.shift) ? data.setup.shift : 8;
+  const equivDays = workers > 0 ? totalHrs / (workers * shift) : 0;
+  const defs = data.defects || [];
+  const statusCounts = { completed:defs.filter(d=>d.status==='completed').length, filledin:defs.filter(d=>d.status==='filledin').length, precut:defs.filter(d=>d.status==='precut').length };
+  if (!data.logs) data.logs = [];
+  const ei = data.logs.findIndex(l => l.date === dateVal);
+  const entry = { date:dateVal, startTime:timeVal, workers, totalHrs, equivDays:parseFloat(equivDays.toFixed(3)), entries:[], statusCounts, savedBy:'Worker', savedAt:new Date().toISOString() };
+  if (ei >= 0) { entry.entries = data.logs[ei].entries||[]; data.logs[ei] = entry; } else data.logs.unshift(entry);
+  localStorage.setItem(LS_JOB_PFX + fvJobId, JSON.stringify(data));
+  const jobName = data.setup ? (data.setup.name||'Job') : 'Job';
+  addNotif(fvJobId, jobName, 'Worker', dateVal);
+  if (activeJobId === fvJobId) { logs = data.logs; try { renderLogHistory(); renderDashboard(); } catch(e){} }
+  const btn = document.getElementById('fv-btn-save-log');
+  btn.classList.add('ok'); btn.innerHTML = '✓ Saved';
+  const now = new Date();
+  document.getElementById('fv-save-ts').textContent = 'Saved ' + now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+  fvToast('Daily log updated');
+}
+
+function fvSubmitDay() { fvSaveLog(); fvToast('Day submitted ✓'); }
+
+function fvToast(msg) {
+  const t = document.getElementById('fv-toast');
+  t.textContent = msg; t.classList.add('on');
+  setTimeout(() => t.classList.remove('on'), 2400);
+}
+
+
+</script>
+</body>
+</html>
