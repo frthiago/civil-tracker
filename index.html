@@ -2047,7 +2047,7 @@ function fvRenderList() {
     const sc = FV_SC[d.status]||'sp';
     return `<div class="fv-dcard ${sc}" onclick="fvOpenDef(${JSON.stringify(d.id||0)})">
       <div class="fv-dnum">${d.num||d.id}</div>
-      <div style="flex:1;min-width:0"><div class="fv-dtype">${d.name||d.code||''}</div><div class="fv-ddim">${dimStr}</div></div>
+      <div style="flex:1;min-width:0"><div class="fv-dtype">${d.code ? d.code+' — '+(d.name||'') : (d.name||'')}</div><div class="fv-ddim">${dimStr}</div></div>
       <span class="fv-sbadge ${sc}">${FV_SL[d.status]||'Pending'}</span>
       <span style="color:#9CA3AF;font-size:18px;flex-shrink:0">›</span>
     </div>`;
